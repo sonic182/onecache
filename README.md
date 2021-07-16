@@ -1,5 +1,4 @@
 
-[![Build Status](https://travis-ci.org/sonic182/onecache.svg?branch=master)](https://travis-ci.org/sonic182/onecache)
 [![Coverage Status](https://coveralls.io/repos/github/sonic182/onecache/badge.svg?branch=master)](https://coveralls.io/github/sonic182/onecache?branch=master)
 ![github status](https://github.com/sonic182/onecache/actions/workflows/python.yml/badge.svg)
 # onecache
