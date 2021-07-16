@@ -83,8 +83,9 @@ class CacheDecorator:
     def __init__(self, maxsize=512, ttl: Optional[int] = None, skip_args: bool = False):
         """
         Args:
-            * maxsize: Maximun size of cache. default=512
-            * ttl: time to expire in milliseconds, if None, it does not expire. default=None
+            * maxsize (int): Maximun size of cache. default: 512
+            * ttl (int): time to expire in milliseconds, if None, it does not expire. default: None
+            * skip_args (bool): apply cache as the function doesn't have any arguments, default: False
         """
         self.cache = ExpirableCache(maxsize, ttl)
         self.maxsize = maxsize
