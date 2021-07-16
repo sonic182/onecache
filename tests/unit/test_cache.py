@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from onecache import AsyncCacheDecorator
+from onecache import AsyncCacheDecorator, CacheDecorator
 
 
 class Counter:
@@ -22,6 +22,19 @@ async def test_async_cache_counter():
 
     assert 1 == (await mycoro(counter))
     assert 1 == (await mycoro(counter))
+
+
+def test_cache_counter():
+    """Test async cache, counter case."""
+    counter = Counter()
+
+    @CacheDecorator()
+    def mycoro(counter: Counter):
+        counter.count += 1
+        return counter.count
+
+    assert 1 == (mycoro(counter))
+    assert 1 == (mycoro(counter))
 
 
 @pytest.mark.asyncio
