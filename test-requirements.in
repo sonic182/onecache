@@ -2,6 +2,7 @@ pylint
 pytest
 pytest-sugar
 pytest-cov
+pytest-asyncio
 autopep8
 flake8
 flake8-docstrings
