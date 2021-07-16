@@ -12,7 +12,7 @@ Tested in python 3.6 and 3.9, for windows, mac and linux (see github status badg
 # Usage
 
 ```python
-from onecache import CacheDecodator
+from onecache import CacheDecorator
 from onecache import AsyncCacheDecorator
 
 
@@ -50,9 +50,9 @@ def test_cache_counter():
 
 Decorator classes supports the following arguments
 
-* maxsize (int): Maximun size of cache. default: 512
-* ttl (int): time to expire in milliseconds, if None, it does not expire. default: None
-* skip_args (bool): apply cache as the function doesn't have any arguments, default: False
+* **maxsize (int)**: Maximun size of cache. default: `512`
+* **ttl (int)**: time to expire in milliseconds, if None, it does not expire. default: `None`
+* **skip_args (bool)**: apply cache as the function doesn't have any arguments, default: `False`
 
 If num of records exceds maxsize, it drops the oldest.
 
