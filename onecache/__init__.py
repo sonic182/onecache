@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
@@ -14,7 +15,7 @@ class ExpirableCache(object):
     """
 
     def __init__(self, size=512, timeout=None):
-        self.cache = {}
+        self.cache = OrderedDict()
         self.timeout = timeout
         self.size = size
 
