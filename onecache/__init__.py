@@ -19,14 +19,17 @@ class ExpirableCache(object):
         self.size = size
 
     def set(self, key, data):
+        if len(self.cache) + 1 > self.size:
+            self._pop_one()
+
         if self.timeout:
             expire_at = datetime.utcnow() + timedelta(milliseconds=self.timeout)
             self.cache[key] = {"value": data, "expire_at": expire_at}
         else:
             self.cache[key] = data
 
-        if len(self.cache) > self.size:
-            self.cache.pop(next(iter(self.cache)))
+    def _pop_one(self):
+        self.cache.pop(next(iter(self.cache)))
 
     def get(self, key):
         self._check_expired(key)
@@ -39,8 +42,11 @@ class ExpirableCache(object):
         if self.timeout and key in self.cache:
             data = self.cache[key]
             if datetime.utcnow() > data["expire_at"]:
-                del self.cache[key]
+                self._remove_key(key)
                 data = None
+
+    def _remove_key(self, key):
+        del self.cache[key]
 
     def __contains__(self, key):
         self._check_expired(key)
@@ -73,21 +79,61 @@ class ExpirableCache(object):
         """Usefull to expire any combination of *args, **kwargs."""
         key = self.get_key(*args, **kwargs)
         if key in self.cache:
-            del self.cache[key]
+            self._remove_key(key)
+
+
+class LRUCache(ExpirableCache):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.access = {}
+
+    def get(self, key):
+        self._check_expired(key)
+        if key in self.cache:
+            self._increment(key)
+        return super().get(key)
+
+    def set(self, key, val):
+        self.access[key] = 0
+        return super().set(key, val)
+
+    def _increment(self, key):
+        self.access[key] = self.access.get(key, 0) + 1
+
+    def _pop_one(self):
+        ordered_cache = sorted(
+            map(
+                lambda item: (item[0], item[1], self.access[item[0]]),
+                self.cache.items(),
+            ),
+            key=lambda item: item[2],
+        )
+        del self.access[ordered_cache[0][0]]
+        del self.cache[ordered_cache[0][0]]
+
+    def _remove_key(self, key):
+        super()._remove_key(key)
+        del self.access[key]
 
 
 # Decorator!
 class CacheDecorator:
     """Decorator for ExpirableCache"""
 
-    def __init__(self, maxsize=512, ttl: Optional[int] = None, skip_args: bool = False):
+    def __init__(
+        self,
+        maxsize=512,
+        ttl: Optional[int] = None,
+        skip_args: bool = False,
+        cache_class=LRUCache,
+    ):
         """
         Args:
             * maxsize (int): Maximun size of cache. default: 512
             * ttl (int): time to expire in milliseconds, if None, it does not expire. default: None
             * skip_args (bool): apply cache as the function doesn't have any arguments, default: False
         """
-        self.cache = ExpirableCache(maxsize, ttl)
+        self.cache = cache_class(maxsize, ttl)
         self.maxsize = maxsize
         self.skip_args = skip_args
 

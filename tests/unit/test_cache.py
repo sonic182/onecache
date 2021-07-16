@@ -104,3 +104,20 @@ async def test_maxsize_cache():
         counters.append(counter)
         assert 1 == (await mycoro(counter))
     assert 91 == (await mycoro(first))
+
+
+def test_lru():
+    """Test async cache, counter case."""
+
+    @CacheDecorator(maxsize=2)
+    def something(num):
+        return num
+
+    for _ in range(4):
+        something(1)
+
+    for _ in range(3):
+        something(2)
+
+    something(3)
+    assert something.cache.cache == {"1": 1, "3": 3}
