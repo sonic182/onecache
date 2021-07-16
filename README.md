@@ -5,7 +5,7 @@
 
 Python cache for sync and async code.
 
-Cache is not LRU, just keeps `maxsize` items in cache and drops the oldest whenever it needs to store a new item. Cache can optionally have TTL.
+Cache uses LRU algoritm. Cache can optionally have TTL.
 
 Tested in python 3.6 and 3.9, for windows, mac and linux (see github status badge), it should work in versions between them.
 

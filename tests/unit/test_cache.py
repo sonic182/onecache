@@ -1,4 +1,5 @@
 import asyncio
+from time import sleep
 
 import pytest
 
@@ -121,3 +122,21 @@ def test_lru():
 
     something(3)
     assert something.cache.cache == {"1": 1, "3": 3}
+
+
+def test_lru_and_ttl():
+    """Test async cache, counter case."""
+
+    @CacheDecorator(maxsize=2, ttl=200)
+    def something(num):
+        return num
+
+    something(1)
+    something(1)
+    sleep(100 / 1000)
+    something(2)
+    sleep(101 / 1000)
+    something(3)
+
+    # ttl will expire the most recently used (1)
+    assert something.cache.access == {"2": 0, "3": 0}

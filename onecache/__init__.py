@@ -40,11 +40,13 @@ class ExpirableCache(object):
         return data
 
     def _check_expired(self, key):
-        if self.timeout and key in self.cache:
-            data = self.cache[key]
-            if datetime.utcnow() > data["expire_at"]:
-                self._remove_key(key)
-                data = None
+        to_rm = []
+        if self.timeout:
+            for key, data in self.cache.items():
+                if datetime.utcnow() > data["expire_at"]:
+                    to_rm.append(key)
+        for key in to_rm:
+            self._remove_key(key)
 
     def _remove_key(self, key):
         del self.cache[key]
