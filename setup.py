@@ -17,7 +17,7 @@ def requirements(filename):
 
 setup(
     name='onecache',
-    version='0.0.4',
+    version='0.1.0',
     description='Python cache for sync and async code',
     long_description=read_file("README.md"),
     long_description_content_type="text/markdown",
