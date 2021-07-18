@@ -61,7 +61,8 @@ class ExpirableCache(object):
     @classmethod
     def get_key(cls, *args, **kwargs):
         """Helper method to generate keys from *args, **kwargs."""
-        kwargs_list = [f"{key}={cls.serialize_key(val)}" for key, val in kwargs.items()]
+        sorted_kwargs = sorted(kwargs.items(), key=lambda item: item[0])
+        kwargs_list = [f"{key}={cls.serialize_key(val)}" for key, val in sorted_kwargs]
         items = list(args) + kwargs_list
         return "-".join([cls.serialize_key(item) for item in items])
 
