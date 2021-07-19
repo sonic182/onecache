@@ -50,9 +50,11 @@ def test_cache_counter():
 
 Decorator classes supports the following arguments
 
-* **maxsize (int)**: Maximun size of cache. default: `512`
-* **ttl (int)**: time to expire in milliseconds, if None, it does not expire. default: `None`
-* **skip_args (bool)**: apply cache as the function doesn't have any arguments, default: `False`
+* **maxsize (int)**: Maximun size of cache. default: 512
+* **ttl (int)**: time to expire in milliseconds, if None, it does not expire. default: None
+* **skip_args (bool)**: apply cache as the function doesn't have any arguments, default: False
+* **cache_class (class)**: Class to use for cache instance. default: LRUCache
+* **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be refresh per access. default: False
 
 If num of records exceds maxsize, it drops the oldest.
 
