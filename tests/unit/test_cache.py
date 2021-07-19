@@ -3,7 +3,7 @@ from time import sleep
 
 import pytest
 
-from onecache import AsyncCacheDecorator, CacheDecorator
+from onecache import AsyncCacheDecorator, CacheDecorator, CacheValue, ExpirableCache
 
 
 class Counter:
@@ -26,7 +26,7 @@ async def test_async_cache_counter():
 
 
 def test_cache_counter():
-    """Test async cache, counter case."""
+    """Test sync cache, counter case."""
     counter = Counter()
 
     @CacheDecorator()
@@ -56,7 +56,7 @@ async def test_async_cache_ttl():
 
 @pytest.mark.asyncio
 async def test_expire_cache():
-    """Test async cache, ttl case."""
+    """Test async cache, expired ttl case."""
     counter = Counter()
 
     @AsyncCacheDecorator()
@@ -107,8 +107,20 @@ async def test_maxsize_cache():
     assert 91 == (await mycoro(first))
 
 
+def test_maxsize_expirable_cache():
+    """Test max size expirable cache."""
+    cache = ExpirableCache(2)
+    cache.set("foo", "something")
+    cache.set("bar", "something")
+    cache.set("baz", "something")
+    assert cache.cache == {
+        "bar": CacheValue("something"),
+        "baz": CacheValue("something"),
+    }
+
+
 def test_lru():
-    """Test async cache, counter case."""
+    """Test simple lru."""
 
     @CacheDecorator(maxsize=2)
     def something(num):
@@ -121,11 +133,29 @@ def test_lru():
         something(2)
 
     something(3)
-    assert something.cache.cache == {"1": 1, "3": 3}
+    assert something.cache.cache == {"1": CacheValue(1), "3": CacheValue(3)}
+
+
+def test_ttl():
+    """Test lru and ttl cache in conjuntion."""
+
+    @CacheDecorator(ttl=200, cache_class=ExpirableCache)
+    def something(num):
+        return num
+
+    something(1)
+    something(1)
+    sleep(1 / 10)
+    something(2)
+    sleep(1 / 10)
+    something(3)
+
+    # ttl will expire the most recently used (1)
+    assert something.cache.cache == {"2": CacheValue(2), "3": CacheValue(3)}
 
 
 def test_lru_and_ttl():
-    """Test async cache, counter case."""
+    """Test lru and ttl cache in conjuntion."""
 
     @CacheDecorator(maxsize=2, ttl=200)
     def something(num):
@@ -133,10 +163,37 @@ def test_lru_and_ttl():
 
     something(1)
     something(1)
-    sleep(100 / 1000)
+    sleep(1 / 10)
     something(2)
-    sleep(101 / 1000)
+    sleep(1 / 10)
     something(3)
 
     # ttl will expire the most recently used (1)
     assert something.cache.access == {"2": 0, "3": 0}
+
+
+def test_lru_and_ttl_refresh():
+    """Test refresh ttl cache"""
+
+    @CacheDecorator(maxsize=2, ttl=200, refresh_ttl=True)
+    def something(num):
+        return num
+
+    something(1)
+    something(1)
+    sleep(1 / 10)
+    something(1)
+    something(2)
+    sleep(1 / 10)
+    something(3)
+
+    # ttl will expire the most recently used (1)
+    assert something.cache.access == {"1": 2, "3": 0}
+
+
+def test_serialize():
+    """Test serialize of args and kwargs in decorator."""
+    cache = ExpirableCache()
+    assert cache.serialize_key({"foo": "bar"}) == "foo=bar"
+    assert cache.serialize_key(["foo", "bar"]) == "foo,bar"
+    assert cache.serialize_key("foo") == "foo"

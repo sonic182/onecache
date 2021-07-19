@@ -1,6 +1,26 @@
 from collections import OrderedDict
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Dict, Optional
+
+
+class CacheValue:
+    """Dummy class for handling cache values."""
+
+    def __init__(self, value: Any, expire_at: datetime = None):
+        self.value = value
+        self.expire_at = expire_at
+
+    def expired(self):
+        """Check if value is expired."""
+        if self.expire_at:
+            return datetime.utcnow() > self.expire_at
+        return False  # pragma: no cover
+
+    def refresh_ttl(self, expire_at: datetime):
+        self.expire_at = expire_at
+
+    def __eq__(self, otherinstance: "CacheValue"):
+        return self.value == otherinstance.value
 
 
 class ExpirableCache(object):
@@ -9,15 +29,17 @@ class ExpirableCache(object):
     on dict structure.
 
     Params:
-        * **size**: max items in dict.
-        * **timeout**: Timeout in milliseconds, if it is None,
-            there is no timeout.
+        * **size (int)**: max items in dict. default=512
+        * **timeout (int)**: Timeout in milliseconds, if it is None,
+            there is no timeout. default=None
+        * **refresh_ttl (int)**: Refresh ttl anytime key is accessed. default=False
     """
 
-    def __init__(self, size=512, timeout=None):
-        self.cache = OrderedDict()
+    def __init__(self, size=512, timeout=None, refresh_ttl=False):
+        self.cache: Dict[str, CacheValue] = OrderedDict()
         self.timeout = timeout
         self.size = size
+        self.refresh_ttl = refresh_ttl
 
     def set(self, key, data):
         if len(self.cache) + 1 > self.size:
@@ -25,25 +47,26 @@ class ExpirableCache(object):
 
         if self.timeout:
             expire_at = datetime.utcnow() + timedelta(milliseconds=self.timeout)
-            self.cache[key] = {"value": data, "expire_at": expire_at}
+            self.cache[key] = CacheValue(data, expire_at)
         else:
-            self.cache[key] = data
+            self.cache[key] = CacheValue(data)
 
     def _pop_one(self):
         self.cache.pop(next(iter(self.cache)))
 
     def get(self, key):
         self._check_expired(key)
-        data = self.cache.get(key)
-        if self.timeout and data:  # if ttl, return value
-            return data["value"]
-        return data
+        cache_value = self.cache.get(key)
+        if cache_value:
+            if self.refresh_ttl:
+                self.refresh_key_ttl(key)
+            return cache_value.value
 
     def _check_expired(self, key):
         to_rm = []
         if self.timeout:
-            for key, data in self.cache.items():
-                if datetime.utcnow() > data["expire_at"]:
+            for key, cache_value in self.cache.items():
+                if cache_value.expired():
                     to_rm.append(key)
         for key in to_rm:
             self._remove_key(key)
@@ -55,8 +78,13 @@ class ExpirableCache(object):
         self._check_expired(key)
         return key in self.cache
 
-    def __len__(self):
-        return len(self.cache)
+    def refresh_key_ttl(self, key: Any, milliseconds=None):
+        """Do refresh of key ttl, if present."""
+        cache_value = self.cache.get(key)
+        if cache_value and (milliseconds or self.timeout):
+            ms = milliseconds if milliseconds else self.timeout
+            expire_at = datetime.utcnow() + timedelta(milliseconds=ms)
+            cache_value.refresh_ttl(expire_at)
 
     @classmethod
     def get_key(cls, *args, **kwargs):
@@ -130,14 +158,18 @@ class CacheDecorator:
         ttl: Optional[int] = None,
         skip_args: bool = False,
         cache_class=LRUCache,
+        refresh_ttl: Optional[bool] = False,
     ):
         """
         Args:
-            * maxsize (int): Maximun size of cache. default: 512
-            * ttl (int): time to expire in milliseconds, if None, it does not expire. default: None
-            * skip_args (bool): apply cache as the function doesn't have any arguments, default: False
+            * **maxsize (int)**: Maximun size of cache. default: 512
+            * **ttl (int)**: time to expire in milliseconds, if None, it does not expire. default: None
+            * **skip_args (bool)**: apply cache as the function doesn't have any arguments, default: False
+            * **cache_class (class)**: Class to use for cache instance. default: LRUCache
+            * **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be
+                refresh per access. default: False
         """
-        self.cache = cache_class(maxsize, ttl)
+        self.cache = cache_class(maxsize, ttl, refresh_ttl=refresh_ttl)
         self.maxsize = maxsize
         self.skip_args = skip_args
 
