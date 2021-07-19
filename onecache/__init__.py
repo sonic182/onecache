@@ -9,6 +9,7 @@ class CacheValue:
     def __init__(self, value: Any, expire_at: datetime = None):
         self.value = value
         self.expire_at = expire_at
+        self.access = 0
 
     def expired(self):
         """Check if value is expired."""
@@ -115,37 +116,26 @@ class ExpirableCache(object):
 
 
 class LRUCache(ExpirableCache):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.access = {}
-
     def get(self, key):
-        self._check_expired(key)
-        if key in self.cache:
-            self._increment(key)
-        return super().get(key)
+        res = super().get(key)
+        if res:
+            cache_value = self.cache[key]
+            if cache_value:
+                self._increment(cache_value)
+                return res
+        return res
 
-    def set(self, key, val):
-        self.access[key] = 0
-        return super().set(key, val)
-
-    def _increment(self, key):
-        self.access[key] = self.access.get(key, 0) + 1
+    def _increment(self, val: CacheValue):
+        val.access += 1
 
     def _pop_one(self):
-        ordered_cache = sorted(
-            map(
-                lambda item: (item[0], item[1], self.access[item[0]]),
-                self.cache.items(),
-            ),
-            key=lambda item: item[2],
-        )
-        del self.access[ordered_cache[0][0]]
+        ordered_cache = sorted(self.cache.items(), key=lambda item: item[1].access)
         del self.cache[ordered_cache[0][0]]
 
-    def _remove_key(self, key):
-        super()._remove_key(key)
-        del self.access[key]
+    @property
+    def access(self):
+        """Get accesses as map."""
+        return {key: val.access for key, val in self.cache.items()}
 
 
 # Decorator!
