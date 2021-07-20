@@ -43,7 +43,7 @@ class ExpirableCache(object):
         self.refresh_ttl = refresh_ttl
 
     def set(self, key, data):
-        if len(self.cache) + 1 > self.size:
+        if len(self.cache) + 1 > self.size and key not in self.cache:
             self._pop_one()
 
         if self.timeout:
