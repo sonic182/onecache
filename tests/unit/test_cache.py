@@ -1,9 +1,16 @@
-import asyncio
+from datetime import datetime, timedelta
 from time import sleep
+from unittest.mock import patch
 
 import pytest
 
 from onecache import AsyncCacheDecorator, CacheDecorator, CacheValue, ExpirableCache
+
+
+def set_expired(key, cache):
+    """Dummy helper to expire a cache value."""
+    key = cache.serialize_key(key)
+    cache.cache[key].expire_at = datetime.utcnow() - timedelta(seconds=1)
 
 
 class Counter:
@@ -49,8 +56,7 @@ async def test_async_cache_ttl():
         return counter.count
 
     assert 1 == (await mycoro(counter))
-    assert 1 == (await mycoro(counter))
-    await asyncio.sleep(0.3)  # 300ms
+    set_expired(counter, mycoro.cache)
     assert 2 == (await mycoro(counter))
 
 
@@ -145,9 +151,8 @@ def test_ttl():
 
     something(1)
     something(1)
-    sleep(1 / 10)
     something(2)
-    sleep(1 / 10)
+    set_expired(1, something.cache)
     something(3)
 
     # ttl will expire the most recently used (1)
@@ -163,9 +168,8 @@ def test_lru_and_ttl():
 
     something(1)
     something(1)
-    sleep(1 / 10)
     something(2)
-    sleep(1 / 10)
+    set_expired(1, something.cache)
     something(3)
 
     # ttl will expire the most recently used (1)
@@ -175,16 +179,16 @@ def test_lru_and_ttl():
 def test_lru_and_ttl_refresh():
     """Test refresh ttl cache"""
 
-    @CacheDecorator(maxsize=2, ttl=200, refresh_ttl=True)
+    @CacheDecorator(maxsize=2, ttl=300, refresh_ttl=True)
     def something(num):
         return num
 
     something(1)
     something(1)
-    sleep(1 / 10)
+    sleep(1.5 / 10)
     something(1)
     something(2)
-    sleep(1 / 10)
+    sleep(1.5 / 10)
     something(3)
 
     # ttl will expire the most recently used (1)
