@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] 2021-07-20
+### Changed
+- Better pop when doing set, and reaching max size
 
 ## [0.3.0] 2021-07-19
 ### Changed
@@ -37,7 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache class
 - Sync and Async decorators
 
-[Unreleased]: https://github.com/sonic182/onecache/compare/0.3.0..HEAD
+[Unreleased]: https://github.com/sonic182/onecache/compare/0.3.1..HEAD
+[0.3.1]: https://github.com/sonic182/onecache/compare/0.3.0..0.3.1
 [0.3.0]: https://github.com/sonic182/onecache/compare/0.2.0..0.3.0
 [0.2.0]: https://github.com/sonic182/onecache/compare/0.1.0..0.2.0
 [0.1.0]: https://github.com/sonic182/onecache/compare/0.0.4..0.1.0
