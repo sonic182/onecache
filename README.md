@@ -59,10 +59,6 @@ Decorator classes supports the following arguments
 If num of records exceds maxsize, it drops the oldest.
 
 
-# TODO
-
-* LRU cache
-
 # Development
 
 Install packages with pip-tools:
