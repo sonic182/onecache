@@ -40,12 +40,12 @@ def test_cache_counter():
     counter = Counter()
 
     @CacheDecorator()
-    def mycoro(counter: Counter):
+    def sample(counter: Counter):
         counter.count += 1
         return counter.count
 
-    assert 1 == (mycoro(counter))
-    assert 1 == (mycoro(counter))
+    assert 1 == (sample(counter))
+    assert 1 == (sample(counter))
 ```
 
 Decorator classes supports the following arguments

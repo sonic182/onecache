@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from datetime import datetime, timedelta
+from threading import Lock
 from typing import Any, Dict, Optional
 
 
@@ -41,16 +42,18 @@ class ExpirableCache(object):
         self.timeout = timeout
         self.size = size
         self.refresh_ttl = refresh_ttl
+        self.lock = Lock()
 
     def set(self, key, data):
-        if len(self.cache) + 1 > self.size and key not in self.cache:
-            self._pop_one()
+        with self.lock:
+            if len(self.cache) + 1 > self.size and key not in self.cache:
+                self._pop_one()
 
-        if self.timeout:
-            expire_at = datetime.utcnow() + timedelta(milliseconds=self.timeout)
-            self.cache[key] = CacheValue(data, expire_at)
-        else:
-            self.cache[key] = CacheValue(data)
+            if self.timeout:
+                expire_at = datetime.utcnow() + timedelta(milliseconds=self.timeout)
+                self.cache[key] = CacheValue(data, expire_at)
+            else:
+                self.cache[key] = CacheValue(data)
 
     def _pop_one(self):
         self.cache.pop(next(iter(self.cache)))
@@ -60,7 +63,8 @@ class ExpirableCache(object):
         cache_value = self.cache.get(key)
         if cache_value:
             if self.refresh_ttl:
-                self.refresh_key_ttl(key)
+                with self.lock:
+                    self.refresh_key_ttl(key)
             return cache_value.value
 
     def _check_expired(self, key):
@@ -121,7 +125,8 @@ class LRUCache(ExpirableCache):
         if res:
             cache_value = self.cache[key]
             if cache_value:
-                self._increment(cache_value)
+                with self.lock:
+                    self._increment(cache_value)
                 return res
         return res
 
