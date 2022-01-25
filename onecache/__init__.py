@@ -1,5 +1,7 @@
 from collections import OrderedDict
+from contextlib import contextmanager
 from datetime import datetime, timedelta
+from threading import Lock
 from typing import Any, Dict, Optional
 
 
@@ -34,23 +36,28 @@ class ExpirableCache(object):
         * **timeout (int)**: Timeout in milliseconds, if it is None,
             there is no timeout. default=None
         * **refresh_ttl (int)**: Refresh ttl anytime key is accessed. default=False
+        * **thread_safe (bool)**: Tell cache decorator to be thread safe. default=False
     """
 
-    def __init__(self, size=512, timeout=None, refresh_ttl=False):
+    def __init__(self, size=512, timeout=None, refresh_ttl=False, thread_safe=False):
         self.cache: Dict[str, CacheValue] = OrderedDict()
         self.timeout = timeout
         self.size = size
         self.refresh_ttl = refresh_ttl
+        self.lock = None
+        if thread_safe:
+            self.lock = Lock()
 
     def set(self, key, data):
-        if len(self.cache) + 1 > self.size and key not in self.cache:
-            self._pop_one()
+        with self._scoped():
+            if len(self.cache) + 1 > self.size and key not in self.cache:
+                self._pop_one()
 
-        if self.timeout:
-            expire_at = datetime.utcnow() + timedelta(milliseconds=self.timeout)
-            self.cache[key] = CacheValue(data, expire_at)
-        else:
-            self.cache[key] = CacheValue(data)
+            if self.timeout:
+                expire_at = datetime.utcnow() + timedelta(milliseconds=self.timeout)
+                self.cache[key] = CacheValue(data, expire_at)
+            else:
+                self.cache[key] = CacheValue(data)
 
     def _pop_one(self):
         self.cache.pop(next(iter(self.cache)))
@@ -60,7 +67,8 @@ class ExpirableCache(object):
         cache_value = self.cache.get(key)
         if cache_value:
             if self.refresh_ttl:
-                self.refresh_key_ttl(key)
+                with self._scoped():
+                    self.refresh_key_ttl(key)
             return cache_value.value
 
     def _check_expired(self, key):
@@ -114,6 +122,14 @@ class ExpirableCache(object):
         if key in self.cache:
             self._remove_key(key)
 
+    @contextmanager
+    def _scoped(self):
+        if self.lock:
+            with self.lock:
+                yield
+        else:
+            yield
+
 
 class LRUCache(ExpirableCache):
     def get(self, key):
@@ -121,7 +137,8 @@ class LRUCache(ExpirableCache):
         if res:
             cache_value = self.cache[key]
             if cache_value:
-                self._increment(cache_value)
+                with self._scoped():
+                    self._increment(cache_value)
                 return res
         return res
 
@@ -149,6 +166,7 @@ class CacheDecorator:
         skip_args: bool = False,
         cache_class=LRUCache,
         refresh_ttl: Optional[bool] = False,
+        thread_safe: Optional[bool] = False,
     ):
         """
         Args:
@@ -158,8 +176,11 @@ class CacheDecorator:
             * **cache_class (class)**: Class to use for cache instance. default: LRUCache
             * **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be
                 refresh per access. default: False
+            * **thread_safe (bool)**: tell decorator to use thread safe lock. default=False
         """
-        self.cache = cache_class(maxsize, ttl, refresh_ttl=refresh_ttl)
+        self.cache = cache_class(
+            maxsize, ttl, refresh_ttl=refresh_ttl, thread_safe=thread_safe
+        )
         self.maxsize = maxsize
         self.skip_args = skip_args
 

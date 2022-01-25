@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from time import sleep
 from unittest.mock import patch
@@ -43,6 +44,26 @@ def test_cache_counter():
 
     assert 1 == (mycoro(counter))
     assert 1 == (mycoro(counter))
+
+
+def test_cache_counter_thread_safe():
+    """Test sync cache, counter case."""
+    counter = Counter()
+
+    @CacheDecorator(thread_safe=True)
+    def mycoro(counter: Counter):
+        counter.count += 1
+        return counter.count
+
+    with ThreadPoolExecutor(3) as executor:
+        futures = []
+        latest = 0
+        for _ in range(100):
+            futures.append(executor.submit(mycoro, counter))
+
+        for fut in futures:
+            latest = fut.result()
+    assert latest == 1
 
 
 @pytest.mark.asyncio
