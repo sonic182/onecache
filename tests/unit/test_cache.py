@@ -50,7 +50,7 @@ def test_cache_counter_thread_safe():
     """Test sync cache, counter case."""
     counter = Counter()
 
-    @CacheDecorator()
+    @CacheDecorator(thread_safe=True)
     def mycoro(counter: Counter):
         counter.count += 1
         return counter.count
@@ -63,7 +63,6 @@ def test_cache_counter_thread_safe():
 
         for fut in futures:
             latest = fut.result()
-            print(latest)
     assert latest == 1
 
 
