@@ -1,29 +1,37 @@
 from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from sys import getsizeof
 from threading import Lock
 from typing import Any, Dict, Optional
 
+try:
+    from onecache.cache_value import CacheValue
+except ImportError:
 
-class CacheValue:
-    """Dummy class for handling cache values."""
+    class CacheValue:
+        """Dummy class for handling cache values."""
 
-    def __init__(self, value: Any, expire_at: datetime = None):
-        self.value = value
-        self.expire_at = expire_at
-        self.access = 0
+        def __init__(self, value: Any, expire_at: datetime = None):
+            self.value = value
+            self.expire_at = expire_at
+            self.access = 0
+            self.size = getsizeof(value)
 
-    def expired(self):
-        """Check if value is expired."""
-        if self.expire_at:
-            return datetime.utcnow() > self.expire_at
-        return False  # pragma: no cover
+        def expired(self):
+            """Check if value is expired."""
+            if self.expire_at:
+                return datetime.utcnow() > self.expire_at
+            return False  # pragma: no cover
 
-    def refresh_ttl(self, expire_at: datetime):
-        self.expire_at = expire_at
+        def refresh_ttl(self, expire_at: datetime):
+            self.expire_at = expire_at
 
-    def __eq__(self, otherinstance: "CacheValue"):
-        return self.value == otherinstance.value
+        def increment(self):
+            self.access += 1
+
+        def __eq__(self, otherinstance: "CacheValue"):
+            return self.value == otherinstance.value
 
 
 class ExpirableCache(object):
@@ -37,12 +45,22 @@ class ExpirableCache(object):
             there is no timeout. default=None
         * **refresh_ttl (int)**: Refresh ttl anytime key is accessed. default=False
         * **thread_safe (bool)**: Tell cache decorator to be thread safe. default=False
+        * **max_mem_size (int)**: max mem size inside cache structure. default=None which means no limit
     """
 
-    def __init__(self, size=512, timeout=None, refresh_ttl=False, thread_safe=False):
+    def __init__(
+        self,
+        size: int = 512,
+        timeout: int = None,
+        refresh_ttl=False,
+        thread_safe=False,
+        max_mem_size: int = None,
+    ):
         self.cache: Dict[str, CacheValue] = OrderedDict()
         self.timeout = timeout
         self.size = size
+        self.max_mem_size = max_mem_size
+        self.current_size = 0
         self.refresh_ttl = refresh_ttl
         self.lock = None
         if thread_safe:
@@ -52,24 +70,39 @@ class ExpirableCache(object):
         with self._scoped():
             if len(self.cache) + 1 > self.size and key not in self.cache:
                 self._pop_one()
+            value = None
 
             if self.timeout:
                 expire_at = datetime.utcnow() + timedelta(milliseconds=self.timeout)
-                self.cache[key] = CacheValue(data, expire_at)
+                value = CacheValue(data, expire_at)
             else:
-                self.cache[key] = CacheValue(data)
+                value = CacheValue(data)
+
+            if self.max_mem_size:
+                # pop data if it will exceed max mem size
+                while (
+                    self.current_size + value.size > self.max_mem_size
+                    and len(self.cache) > 1
+                ):
+                    self._pop_one()
+            self.cache[key] = value
+            self.current_size += value.size
 
     def _pop_one(self):
-        self.cache.pop(next(iter(self.cache)))
+        key = next(iter(self.cache))
+        val = self.cache.pop(key)
+        self.current_size -= val.size
 
-    def get(self, key):
+    def get(self, key, fetch_value=True):
         self._check_expired(key)
         cache_value = self.cache.get(key)
         if cache_value:
             if self.refresh_ttl:
                 with self._scoped():
                     self.refresh_key_ttl(key)
-            return cache_value.value
+            if fetch_value:
+                return cache_value.value
+            return cache_value
 
     def _check_expired(self, key):
         to_rm = []
@@ -81,6 +114,8 @@ class ExpirableCache(object):
             self._remove_key(key)
 
     def _remove_key(self, key):
+        item = self.cache[key]
+        self.current_size -= item.size
         del self.cache[key]
 
     def __contains__(self, key):
@@ -133,21 +168,19 @@ class ExpirableCache(object):
 
 class LRUCache(ExpirableCache):
     def get(self, key):
-        res = super().get(key)
-        if res:
-            cache_value = self.cache[key]
-            if cache_value:
-                with self._scoped():
-                    self._increment(cache_value)
-                return res
-        return res
+        cache_value = super().get(key, fetch_value=False)
+        if cache_value:
+            with self._scoped():
+                self._increment(cache_value)
+        return cache_value.value
 
     def _increment(self, val: CacheValue):
-        val.access += 1
+        val.increment()
 
     def _pop_one(self):
         ordered_cache = sorted(self.cache.items(), key=lambda item: item[1].access)
-        del self.cache[ordered_cache[0][0]]
+        key, cache_value = ordered_cache[0]
+        self._remove_key(key)
 
     @property
     def access(self):
@@ -167,6 +200,7 @@ class CacheDecorator:
         cache_class=LRUCache,
         refresh_ttl: Optional[bool] = False,
         thread_safe: Optional[bool] = False,
+        max_mem_size: Optional[int] = None,
     ):
         """
         Args:
@@ -177,9 +211,14 @@ class CacheDecorator:
             * **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be
                 refresh per access. default: False
             * **thread_safe (bool)**: tell decorator to use thread safe lock. default=False
+            * **max_mem_size (int)**: max mem size inside cache structure. default=None which means no limit
         """
         self.cache = cache_class(
-            maxsize, ttl, refresh_ttl=refresh_ttl, thread_safe=thread_safe
+            maxsize,
+            ttl,
+            refresh_ttl=refresh_ttl,
+            thread_safe=thread_safe,
+            max_mem_size=max_mem_size,
         )
         self.maxsize = maxsize
         self.skip_args = skip_args
