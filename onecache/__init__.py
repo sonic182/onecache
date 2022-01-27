@@ -5,33 +5,7 @@ from sys import getsizeof
 from threading import Lock
 from typing import Any, Dict, Optional
 
-try:
-    from onecache.cache_value import CacheValue
-except ImportError:
-
-    class CacheValue:
-        """Dummy class for handling cache values."""
-
-        def __init__(self, value: Any, expire_at: datetime = None):
-            self.value = value
-            self.expire_at = expire_at
-            self.access = 0
-            self.size = getsizeof(value)
-
-        def expired(self):
-            """Check if value is expired."""
-            if self.expire_at:
-                return datetime.utcnow() > self.expire_at
-            return False  # pragma: no cover
-
-        def refresh_ttl(self, expire_at: datetime):
-            self.expire_at = expire_at
-
-        def increment(self):
-            self.access += 1
-
-        def __eq__(self, otherinstance: "CacheValue"):
-            return self.value == otherinstance.value
+from onecache.cache_value import CacheValue
 
 
 class ExpirableCache(object):
