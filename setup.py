@@ -69,7 +69,7 @@ def requirements(filename):
 
 setup(
     name="onecache",
-    version="0.3.2",
+    version="0.4.0b1",
     description="Python cache for sync and async code",
     long_description=read_file("README.md"),
     long_description_content_type="text/markdown",
