@@ -35,6 +35,7 @@ test: test36 test37 test38 test39
 
 clear:
 	-rm -r $(shell find . -name __pycache__) build dist .mypy_cache onecache.egg-info .eggs
+	-rm -r onecache/*.so onecache/*.c
 
 build: clear
 	python setup.py sdist

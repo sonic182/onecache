@@ -12,7 +12,7 @@ def set_expired(key, cache):
     """Dummy helper to expire a cache value."""
     key = cache.serialize_key(key)
     val = cache.cache[key]
-    val.expire_at = datetime.utcnow() - timedelta(seconds=1)
+    val.set_expired(datetime.utcnow() - timedelta(seconds=1))
 
 
 class Counter:
