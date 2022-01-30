@@ -1,7 +1,7 @@
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from time import sleep
-from unittest.mock import patch
 
 import pytest
 
@@ -11,7 +11,8 @@ from onecache import AsyncCacheDecorator, CacheDecorator, CacheValue, ExpirableC
 def set_expired(key, cache):
     """Dummy helper to expire a cache value."""
     key = cache.serialize_key(key)
-    cache.cache[key].expire_at = datetime.utcnow() - timedelta(seconds=1)
+    val = cache.cache[key]
+    val.set_expired(datetime.utcnow() - timedelta(seconds=1))
 
 
 class Counter:
@@ -222,3 +223,25 @@ def test_serialize():
     assert cache.serialize_key({"foo": "bar"}) == "foo=bar"
     assert cache.serialize_key(["foo", "bar"]) == "foo,bar"
     assert cache.serialize_key("foo") == "foo"
+
+
+def test_lru_max_mem_size():
+    """Test simple lru."""
+
+    # max 3KiB
+    random_data = []
+
+    @CacheDecorator(maxsize=2, max_mem_size=1024 * 3)
+    def something(num):
+        res = os.urandom(1025)
+        random_data.append(res)
+        return res
+
+    for i in range(3):
+        something(i)
+
+    # key "0" got removed
+    assert something.cache.cache == {
+        "1": CacheValue(random_data[1]),
+        "2": CacheValue(random_data[2]),
+    }

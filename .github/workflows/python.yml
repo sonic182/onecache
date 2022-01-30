@@ -19,10 +19,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Install dependencies no ext
         run: |
           python -m pip install --upgrade pip
+          pip install cython
           pip install -e ".[test]"
+        env:
+          ONECACHE_NO_EXTENSIONS: 1
 
       - name: Test with pytest
         run: |
@@ -32,3 +35,15 @@ jobs:
         if: ${{ matrix.os != 'windows-latest' }}
         run: |
           COVERALLS_REPO_TOKEN=${{secrets.COVERALLS_REPO_TOKEN}} coveralls
+
+
+      - name: Install dependencies and extension
+        run: |
+          python setup.py build_ext --inplace
+          pip install -e ".[test]"
+        env:
+          CYTHONIZE: 1
+
+      - name: Test with pytest and extension
+        run: |
+          py.test

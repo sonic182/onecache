@@ -21,3 +21,5 @@ logs/*.log*
 *.csv
 venv/
 env/
+onecache/*.so
+onecache/*.c
