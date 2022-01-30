@@ -39,6 +39,9 @@ clear:
 
 build: clear
 	python setup.py sdist
+	CYTHONIZE=1 python setup.py build_ext --inplace
+	-rm -r onecache/*.so
+	python setup.py sdist
 
 upload_pypi: build
 	pip install twine
