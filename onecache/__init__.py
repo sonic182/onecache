@@ -182,14 +182,14 @@ class CacheDecorator:
     ):
         """
         Args:
-            * **maxsize (int)**: Maximun size of cache items. default: 512
+            * **maxsize (int)**: Maximun number of items to be cached. default: 512
             * **ttl (int)**: time to expire in milliseconds, if None, it does not expire. default: None
             * **skip_args (bool)**: apply cache as the function doesn't have any arguments, default: False
             * **cache_class (class)**: Class to use for cache instance. default: LRUCache
             * **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be
                 refresh per access. default: False
             * **thread_safe (bool)**: tell decorator to use thread safe lock. default=False
-            * **max_mem_size (int)**: max mem size in bytes, all cache values in cache structure. default=None which means no limit
+            * **max_mem_size (int)**: max mem size in bytes. Ceil for sum of cache values sizes. default=None which means no limit
         """
         self.cache = cache_class(
             maxsize,
