@@ -60,12 +60,15 @@ class ExpirableCache(object):
                 ):
                     self._pop_one()
             self.cache[key] = value
-            self.current_size += value.size
+
+            if self.max_mem_size:
+                self.current_size += value.size
 
     def _pop_one(self):
         key = next(iter(self.cache))
         val = self.cache.pop(key)
-        self.current_size -= val.size
+        if self.max_mem_size:
+            self.current_size -= val.size
 
     def get(self, key, fetch_value=True):
         self._check_expired(key)
@@ -89,7 +92,8 @@ class ExpirableCache(object):
 
     def _remove_key(self, key):
         item = self.cache[key]
-        self.current_size -= item.size
+        if self.max_mem_size:
+            self.current_size -= item.size
         del self.cache[key]
 
     def __contains__(self, key):
@@ -178,14 +182,14 @@ class CacheDecorator:
     ):
         """
         Args:
-            * **maxsize (int)**: Maximun size of cache. default: 512
+            * **maxsize (int)**: Maximun size of cache items. default: 512
             * **ttl (int)**: time to expire in milliseconds, if None, it does not expire. default: None
             * **skip_args (bool)**: apply cache as the function doesn't have any arguments, default: False
             * **cache_class (class)**: Class to use for cache instance. default: LRUCache
             * **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be
                 refresh per access. default: False
             * **thread_safe (bool)**: tell decorator to use thread safe lock. default=False
-            * **max_mem_size (int)**: max mem size inside cache structure. default=None which means no limit
+            * **max_mem_size (int)**: max mem size in bytes, all cache values in cache structure. default=None which means no limit
         """
         self.cache = cache_class(
             maxsize,
