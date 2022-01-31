@@ -1,4 +1,5 @@
 import os
+from sys import getsizeof
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from time import sleep
@@ -240,8 +241,11 @@ def test_lru_max_mem_size():
     for i in range(3):
         something(i)
 
+    expected = (getsizeof(random_data[1]) * 2) + (getsizeof("1") + getsizeof("2"))
+
     # key "0" got removed
     assert something.cache.cache == {
         "1": CacheValue(random_data[1]),
         "2": CacheValue(random_data[2]),
     }
+    assert something.cache.current_size == expected

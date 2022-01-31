@@ -41,10 +41,11 @@ class ExpirableCache(object):
             self.lock = Lock()
 
     def set(self, key, data):
+        key_size = getsizeof(key)
+        value = None
         with self._scoped():
             if len(self.cache) + 1 > self.size and key not in self.cache:
                 self._pop_one()
-            value = None
 
             if self.timeout:
                 expire_at = datetime.utcnow() + timedelta(milliseconds=self.timeout)
@@ -55,20 +56,18 @@ class ExpirableCache(object):
             if self.max_mem_size:
                 # pop data if it will exceed max mem size
                 while (
-                    self.current_size + value.size > self.max_mem_size
+                    self.current_size + key_size + value.size > self.max_mem_size
                     and len(self.cache) > 1
                 ):
                     self._pop_one()
             self.cache[key] = value
 
             if self.max_mem_size:
-                self.current_size += value.size
+                self.current_size += key_size + value.size
 
     def _pop_one(self):
         key = next(iter(self.cache))
-        val = self.cache.pop(key)
-        if self.max_mem_size:
-            self.current_size -= val.size
+        self._remove_key(key)
 
     def get(self, key, fetch_value=True):
         self._check_expired(key)
@@ -92,8 +91,10 @@ class ExpirableCache(object):
 
     def _remove_key(self, key):
         item = self.cache[key]
+        key_size = getsizeof(key)
         if self.max_mem_size:
-            self.current_size -= item.size
+            self.current_size -= item.size + key_size
+
         del self.cache[key]
 
     def __contains__(self, key):
@@ -157,7 +158,7 @@ class LRUCache(ExpirableCache):
 
     def _pop_one(self):
         ordered_cache = sorted(self.cache.items(), key=lambda item: item[1].access)
-        key, cache_value = ordered_cache[0]
+        key, _ = ordered_cache[0]
         self._remove_key(key)
 
     @property
