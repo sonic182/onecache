@@ -56,7 +56,7 @@ Decorator classes supports the following arguments
 * **cache_class (class)**: Class to use for cache instance. default: LRUCache
 * **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be refresh per access. default: False
 * **thread_safe (bool)**: tell decorator to use thread safe lock. default=False
-* **max_mem_size (int)**: max mem size in bytes. Ceil for sum of cache values sizes. default=None which means no limit
+* **max_mem_size (int)**: max mem size in bytes. Ceil for sum of cache values sizes. default=None which means no limit. For pypy this value is ignored as the objects can change by the JIT compilation.
 
 If num of records exceds maxsize, it drops the oldest.
 
