@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.5.0] 2023-03-27
+### Fixed
+- Pypy onecache works
+
 ## [0.4.1] 2022-02-04
 ### Fixed
 - Counting values size at decreasing
@@ -52,7 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache class
 - Sync and Async decorators
 
-[Unreleased]: https://github.com/sonic182/onecache/compare/0.4.1..HEAD
+[Unreleased]: https://github.com/sonic182/onecache/compare/0.5.0..HEAD
+[0.5.0]: https://github.com/sonic182/onecache/compare/0.4.1..0.5.0
 [0.4.1]: https://github.com/sonic182/onecache/compare/0.4.0..0.4.1
 [0.4.0]: https://github.com/sonic182/onecache/compare/0.3.2..0.4.0
 [0.3.2]: https://github.com/sonic182/onecache/compare/0.3.1..0.3.2
