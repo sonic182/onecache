@@ -1,7 +1,8 @@
+from onecache.utils import IS_PYPY
 import os
-from sys import getsizeof
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from sys import getsizeof
 from time import sleep
 
 import pytest
@@ -228,7 +229,8 @@ def test_serialize():
 
 def test_lru_max_mem_size():
     """Test simple lru."""
-
+    if IS_PYPY:
+        pytest.skip("unsupported interpreter")
     # max 3KiB
     random_data = []
 
