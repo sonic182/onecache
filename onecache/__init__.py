@@ -46,7 +46,7 @@ class ExpirableCache(object):
             self.lock = Lock()
 
     def set(self, key, data):
-        key_size = getsizeof(key)
+        key_size = None
         value = None
         with self._scoped():
             if len(self.cache) + 1 > self.size and key not in self.cache:
@@ -59,6 +59,7 @@ class ExpirableCache(object):
                 value = CacheValue(data)
 
             if self.max_mem_size:
+                key_size = getsizeof(key)
                 # pop data if it will exceed max mem size
                 while (
                     self.current_size + key_size + value.size > self.max_mem_size
