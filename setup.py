@@ -23,7 +23,7 @@ def no_extensions():
     is_compiler = False
     for compiler in ["gcc", "clang"]:
         is_compiler = which(compiler) is not None
-    return NO_EXTENSIONS or not is_compiler 
+    return NO_EXTENSIONS or not is_compiler
 
 
 # https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html#distributing-cython-modules

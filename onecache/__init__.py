@@ -1,3 +1,6 @@
+"""Onecache main module."""
+
+import platform
 from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -6,6 +9,8 @@ from threading import Lock
 from typing import Any, Dict, Optional
 
 from onecache.cache_value import CacheValue
+
+IS_PYPY = platform.python_implementation().lower().startswith("pypy")
 
 
 class ExpirableCache(object):
@@ -19,7 +24,7 @@ class ExpirableCache(object):
             there is no timeout. default=None
         * **refresh_ttl (int)**: Refresh ttl anytime key is accessed. default=False
         * **thread_safe (bool)**: Tell cache decorator to be thread safe. default=False
-        * **max_mem_size (int)**: max mem size inside cache structure. default=None which means no limit
+        * **max_mem_size (int)**: max mem size inside cache structure. default=None which means no limit. For pypy this value is ignored as the objects can change by the JIT compilation.
     """
 
     def __init__(
@@ -33,7 +38,7 @@ class ExpirableCache(object):
         self.cache: Dict[str, CacheValue] = OrderedDict()
         self.timeout = timeout
         self.size = size
-        self.max_mem_size = max_mem_size
+        self.max_mem_size = None if IS_PYPY else max_mem_size
         self.current_size = 0
         self.refresh_ttl = refresh_ttl
         self.lock = None
@@ -190,7 +195,7 @@ class CacheDecorator:
             * **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be
                 refresh per access. default: False
             * **thread_safe (bool)**: tell decorator to use thread safe lock. default=False
-            * **max_mem_size (int)**: max mem size in bytes. Ceil for sum of cache values sizes. default=None which means no limit
+            * **max_mem_size (int)**: max mem size inside cache structure. default=None which means no limit. For pypy this value is ignored as the objects can change by the JIT compilation.
         """
         self.cache = cache_class(
             maxsize,
