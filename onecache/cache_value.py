@@ -2,12 +2,14 @@ from datetime import datetime
 from sys import getsizeof
 from typing import Any
 
+from onecache.utils import IS_PYPY
+
 
 class CacheValue:
     """Dummy class for handling cache values."""
 
     def __init__(self, value: Any, expire_at: datetime = None):
-        self.size = getsizeof(value)
+        self.size = NONE if IS_PYPY else getsizeof(value)
         self.access = 0
 
         self.value = value

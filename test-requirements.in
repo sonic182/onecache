@@ -1,9 +1,10 @@
-pylint
-pytest
-pytest-sugar
-pytest-cov
-pytest-asyncio
 autopep8
+coveralls
 flake8
 flake8-docstrings
-coveralls
+pylint
+pytest
+pytest-asyncio
+pytest-black
+pytest-cov
+pytest-sugar

@@ -1,6 +1,5 @@
 """Onecache main module."""
 
-import platform
 from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -9,14 +8,11 @@ from threading import Lock
 from typing import Any, Dict, Optional
 
 from onecache.cache_value import CacheValue
-
-IS_PYPY = platform.python_implementation().lower().startswith("pypy")
+from onecache.utils import IS_PYPY
 
 
 class ExpirableCache(object):
-    """
-    Class used for custom cache decorator, dummy expirable cache based
-    on dict structure.
+    """Class used for custom cache decorator, dummy expirable cache based on dict structure.
 
     Params:
         * **size (int)**: max items in dict. default=512
@@ -97,8 +93,8 @@ class ExpirableCache(object):
 
     def _remove_key(self, key):
         item = self.cache[key]
-        key_size = getsizeof(key)
         if self.max_mem_size:
+            key_size = getsizeof(key)
             self.current_size -= item.size + key_size
 
         del self.cache[key]
