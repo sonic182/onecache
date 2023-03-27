@@ -1,3 +1,5 @@
+"""Onecache main module."""
+
 from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -6,12 +8,11 @@ from threading import Lock
 from typing import Any, Dict, Optional
 
 from onecache.cache_value import CacheValue
+from onecache.utils import IS_PYPY
 
 
 class ExpirableCache(object):
-    """
-    Class used for custom cache decorator, dummy expirable cache based
-    on dict structure.
+    """Class used for custom cache decorator, dummy expirable cache based on dict structure.
 
     Params:
         * **size (int)**: max items in dict. default=512
@@ -19,7 +20,7 @@ class ExpirableCache(object):
             there is no timeout. default=None
         * **refresh_ttl (int)**: Refresh ttl anytime key is accessed. default=False
         * **thread_safe (bool)**: Tell cache decorator to be thread safe. default=False
-        * **max_mem_size (int)**: max mem size inside cache structure. default=None which means no limit
+        * **max_mem_size (int)**: max mem size inside cache structure. default=None which means no limit. For pypy this value is ignored as the objects can change by the JIT compilation.
     """
 
     def __init__(
@@ -33,7 +34,7 @@ class ExpirableCache(object):
         self.cache: Dict[str, CacheValue] = OrderedDict()
         self.timeout = timeout
         self.size = size
-        self.max_mem_size = max_mem_size
+        self.max_mem_size = None if IS_PYPY else max_mem_size
         self.current_size = 0
         self.refresh_ttl = refresh_ttl
         self.lock = None
@@ -41,7 +42,7 @@ class ExpirableCache(object):
             self.lock = Lock()
 
     def set(self, key, data):
-        key_size = getsizeof(key)
+        key_size = None
         value = None
         with self._scoped():
             if len(self.cache) + 1 > self.size and key not in self.cache:
@@ -54,6 +55,7 @@ class ExpirableCache(object):
                 value = CacheValue(data)
 
             if self.max_mem_size:
+                key_size = getsizeof(key)
                 # pop data if it will exceed max mem size
                 while (
                     self.current_size + key_size + value.size > self.max_mem_size
@@ -91,8 +93,8 @@ class ExpirableCache(object):
 
     def _remove_key(self, key):
         item = self.cache[key]
-        key_size = getsizeof(key)
         if self.max_mem_size:
+            key_size = getsizeof(key)
             self.current_size -= item.size + key_size
 
         del self.cache[key]
@@ -190,7 +192,7 @@ class CacheDecorator:
             * **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be
                 refresh per access. default: False
             * **thread_safe (bool)**: tell decorator to use thread safe lock. default=False
-            * **max_mem_size (int)**: max mem size in bytes. Ceil for sum of cache values sizes. default=None which means no limit
+            * **max_mem_size (int)**: max mem size inside cache structure. default=None which means no limit. For pypy this value is ignored as the objects can change by the JIT compilation.
         """
         self.cache = cache_class(
             maxsize,
