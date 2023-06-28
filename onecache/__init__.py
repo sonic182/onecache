@@ -153,7 +153,9 @@ class LRUCache(ExpirableCache):
         if cache_value:
             with self._scoped():
                 self._increment(cache_value)
-        return cache_value.value
+            return cache_value.value
+        
+        return None
 
     def _increment(self, val: CacheValue):
         val.increment()
