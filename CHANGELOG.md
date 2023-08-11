@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Removed all cython stuff
 
+## [0.5.1] 2023-06-28
+### Fixed
+- Prevent access to attribute if cache_value is None
+
 ## [0.5.0] 2023-03-27
 ### Fixed
 - Pypy onecache works
