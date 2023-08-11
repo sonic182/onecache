@@ -1,7 +1,6 @@
 coveralls
 flake8
 flake8-docstrings
-pylint
 pytest
 pytest-asyncio
 pytest-cov

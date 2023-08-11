@@ -4,8 +4,6 @@
 #
 #    pip-compile test-requirements.in
 #
-astroid==2.15.6
-    # via pylint
 certifi==2023.7.22
     # via requests
 charset-normalizer==3.2.0
@@ -16,8 +14,6 @@ coverage[toml]==6.5.0
     #   pytest-cov
 coveralls==3.3.1
     # via -r test-requirements.in
-dill==0.3.7
-    # via pylint
 docopt==0.6.2
     # via coveralls
 exceptiongroup==1.1.2
@@ -38,20 +34,12 @@ importlib-metadata==4.2.0
     #   pytest
 iniconfig==2.0.0
     # via pytest
-isort==5.11.5
-    # via pylint
-lazy-object-proxy==1.9.0
-    # via astroid
 mccabe==0.7.0
-    # via
-    #   flake8
-    #   pylint
+    # via flake8
 packaging==23.1
     # via
     #   pytest
     #   pytest-sugar
-platformdirs==3.10.0
-    # via pylint
 pluggy==1.2.0
     # via pytest
 pycodestyle==2.9.1
@@ -60,8 +48,6 @@ pydocstyle==6.3.0
     # via flake8-docstrings
 pyflakes==2.5.0
     # via flake8
-pylint==2.17.5
-    # via -r test-requirements.in
 pytest==7.4.0
     # via
     #   -r test-requirements.in
@@ -83,22 +69,12 @@ termcolor==2.3.0
 tomli==2.0.1
     # via
     #   coverage
-    #   pylint
     #   pytest
-tomlkit==0.12.1
-    # via pylint
-typed-ast==1.5.5
-    # via astroid
 typing-extensions==4.7.1
     # via
-    #   astroid
     #   importlib-metadata
-    #   platformdirs
-    #   pylint
     #   pytest-asyncio
 urllib3==2.0.4
     # via requests
-wrapt==1.15.0
-    # via astroid
 zipp==3.15.0
     # via importlib-metadata

@@ -1,2 +1,3 @@
-sphinx
 autopep8
+sphinx
+pylint
