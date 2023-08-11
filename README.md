@@ -7,7 +7,7 @@ Python cache for sync and async code.
 
 Cache uses LRU algoritm. Cache can optionally have TTL.
 
-Tested in python 3.7, 3.9, and pypy3.9 for windows, mac and linux (see github status badge), it should work in versions between them. It may work for python3.6
+Tested in python 3.7, 3.9, 3.11 and pypy3.9 for windows, mac and linux (see github status badge), it should work in versions between them. It may work for python3.6
 
 # Usage
 
