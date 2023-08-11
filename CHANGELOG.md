@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [0.6.0] 2023-08-11
+### Added
+- Compatibility and tests for python versions 3.10 and 3.11
+
+### Removed
+- Removed all cython stuff
+
 ## [0.5.0] 2023-03-27
 ### Fixed
 - Pypy onecache works
@@ -57,7 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache class
 - Sync and Async decorators
 
-[Unreleased]: https://github.com/sonic182/onecache/compare/0.5.0..HEAD
+[Unreleased]: https://github.com/sonic182/onecache/compare/0.6.0..HEAD
+[0.6.0]: https://github.com/sonic182/onecache/compare/0.5.1..0.6.0
+[0.5.1]: https://github.com/sonic182/onecache/compare/0.5.0..0.5.1
 [0.5.0]: https://github.com/sonic182/onecache/compare/0.4.1..0.5.0
 [0.4.1]: https://github.com/sonic182/onecache/compare/0.4.0..0.4.1
 [0.4.0]: https://github.com/sonic182/onecache/compare/0.3.2..0.4.0
