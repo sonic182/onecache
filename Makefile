@@ -26,21 +26,25 @@ test38:
 	echo "TEST PYTHON 3.8"
 	docker run -i --rm -v $(shell pwd):/app python:3.8 bash -l -c "$(DOCKER_CMD)"
 
-tes39:
+test39:
 	echo "TEST PYTHON 3.9"
 	docker run -i --rm -v $(shell pwd):/app python:3.9 bash -l -c "$(DOCKER_CMD)"
 
-test: test36 test37 test38 test39
+test310:
+	echo "TEST PYTHON 3.10"
+	docker run -i --rm -v $(shell pwd):/app python:3.10 bash -l -c "$(DOCKER_CMD)"
+
+test311:
+	echo "TEST PYTHON 3.11"
+	docker run -i --rm -v $(shell pwd):/app python:3.11 bash -l -c "$(DOCKER_CMD)"
+
+test: test36 test37 test38 test39 test310 test311
 	echo "OK"
 
 clear:
 	-rm -r $(shell find . -name __pycache__) build dist .mypy_cache onecache.egg-info .eggs
-	-rm -r onecache/*.so onecache/*.c
 
 build: clear
-	python setup.py sdist
-	CYTHONIZE=1 python setup.py build_ext --inplace
-	-rm -r onecache/*.so
 	python setup.py sdist
 
 upload_pypi: build
