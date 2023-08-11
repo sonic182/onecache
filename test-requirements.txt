@@ -6,7 +6,7 @@
 #
 astroid==2.15.6
     # via pylint
-black==23.7.0
+black>=23.3.0
     # via pytest-black
 certifi==2023.7.22
     # via requests
