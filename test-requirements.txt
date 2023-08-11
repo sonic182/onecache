@@ -6,14 +6,10 @@
 #
 astroid==2.15.6
     # via pylint
-black==23.3.0
-    # via pytest-black
 certifi==2023.7.22
     # via requests
 charset-normalizer==3.2.0
     # via requests
-click==8.1.6
-    # via black
 coverage[toml]==6.5.0
     # via
     #   coveralls
@@ -50,19 +46,12 @@ mccabe==0.7.0
     # via
     #   flake8
     #   pylint
-mypy-extensions==1.0.0
-    # via black
 packaging==23.1
     # via
-    #   black
     #   pytest
     #   pytest-sugar
-pathspec==0.11.2
-    # via black
 platformdirs==3.10.0
-    # via
-    #   black
-    #   pylint
+    # via pylint
 pluggy==1.2.0
     # via pytest
 pycodestyle==2.9.1
@@ -77,12 +66,9 @@ pytest==7.4.0
     # via
     #   -r test-requirements.in
     #   pytest-asyncio
-    #   pytest-black
     #   pytest-cov
     #   pytest-sugar
 pytest-asyncio==0.21.1
-    # via -r test-requirements.in
-pytest-black==0.3.12
     # via -r test-requirements.in
 pytest-cov==4.1.0
     # via -r test-requirements.in
@@ -94,24 +80,18 @@ snowballstemmer==2.2.0
     # via pydocstyle
 termcolor==2.3.0
     # via pytest-sugar
-toml==0.10.2
-    # via pytest-black
 tomli==2.0.1
     # via
-    #   black
     #   coverage
     #   pylint
     #   pytest
 tomlkit==0.12.1
     # via pylint
 typed-ast==1.5.5
-    # via
-    #   astroid
-    #   black
+    # via astroid
 typing-extensions==4.7.1
     # via
     #   astroid
-    #   black
     #   importlib-metadata
     #   platformdirs
     #   pylint
