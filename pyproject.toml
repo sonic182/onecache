@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "onecache"
-version = "0.6.0"
+version = "0.7.0"
 description = "Python cache for sync and async code"
 authors = ["Johanderson Mogollon <johander1822@gmail.com>"]
 license = "MIT"
