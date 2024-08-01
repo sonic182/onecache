@@ -22,12 +22,12 @@ classifiers = [
 python = ">=3.8,<3.13"
 
 [tool.poetry.group.test.dependencies]
-coveralls = "^4.0.1"
 flake8 =  {version= "^7.1.0", python = ">=3.8.1"}
 flake8-docstrings = "^1.7.0"
 pytest = "^8.3.2"
 pytest-asyncio = "^0.23.8"
 pytest-sugar = "^1.0.0"
+pytest-cov = "^5.0.0"
 
 
 [tool.poetry.group.dev.dependencies]
