@@ -8,4 +8,4 @@ def utcnow():
     if sys.version_info >= (3, 11):
         return datetime.datetime.now(datetime.UTC)
     else:
-        return datetime.datetime.utcnow().replace(tzinfo=datetime.UTC)
+        return datetime.datetime.utcnow()
