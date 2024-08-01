@@ -1,7 +1,5 @@
 """Onecache main module."""
 
-import datetime
-import sys
 from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import timedelta
@@ -10,14 +8,7 @@ from threading import Lock
 from typing import Any, Dict, Optional
 
 from onecache.cache_value import CacheValue
-from onecache.utils import IS_PYPY
-
-
-def utcnow():
-    if sys.version_info >= (3, 11):
-        return datetime.datetime.now(datetime.UTC)
-    else:
-        return datetime.datetime.utcnow()
+from onecache.utils import IS_PYPY, utcnow
 
 
 class ExpirableCache(object):
