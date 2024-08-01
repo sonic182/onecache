@@ -1,4 +1,4 @@
-# Minimal makefile for Sphinx documentation
+# Minimal makefile for Sphinx documentation and some more project commands
 #
 
 # You can set these variables from the command line, and also
@@ -7,20 +7,12 @@ SPHINXOPTS    ?=
 SPHINXBUILD   ?= sphinx-build
 SOURCEDIR     = sourcedocs
 BUILDDIR      = docs
-DOCKER_CMD		= cd /root && cp -r /app/* . && pip install -r requirements.txt && pip install -e \".[test]\" && pytest
+DOCKER_CMD		= cd /root && cp -r /app/* . && pip install poetry && poetry install && poetry run pytest
 
 # Put it first so that "make" without argument is like "make help".
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-
-test36:
-	echo "TEST PYTHON 3.6"
-	docker run -i --rm -v $(shell pwd):/app python:3.6 bash -l -c "$(DOCKER_CMD)"
-
-test37:
-	echo "TEST PYTHON 3.7"
-	docker run -i --rm -v $(shell pwd):/app python:3.7 bash -l -c "$(DOCKER_CMD)"
 
 test38:
 	echo "TEST PYTHON 3.8"
@@ -38,14 +30,18 @@ test311:
 	echo "TEST PYTHON 3.11"
 	docker run -i --rm -v $(shell pwd):/app python:3.11 bash -l -c "$(DOCKER_CMD)"
 
-test: test36 test37 test38 test39 test310 test311
+test312:
+	echo "TEST PYTHON 3.12"
+	docker run -i --rm -v $(shell pwd):/app python:3.12 bash -l -c "$(DOCKER_CMD)"
+
+test: test38 test39 test310 test311 test312
 	echo "OK"
 
 clear:
 	-rm -r $(shell find . -name __pycache__) build dist .mypy_cache onecache.egg-info .eggs
 
 build: clear
-	python setup.py sdist
+	poetry build
 
 upload_pypi: build
 	pip install twine

@@ -1,7 +1,0 @@
-coveralls
-flake8
-flake8-docstrings
-pytest
-pytest-asyncio
-pytest-cov
-pytest-sugar

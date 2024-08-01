@@ -1,14 +1,14 @@
 from datetime import datetime
 from sys import getsizeof
-from typing import Any
+from typing import Any, Optional
 
-from onecache.utils import IS_PYPY
+from onecache.utils import IS_PYPY, utcnow
 
 
 class CacheValue:
     """Dummy class for handling cache values."""
 
-    def __init__(self, value: Any, expire_at: datetime = None):
+    def __init__(self, value: Any, expire_at: Optional[datetime] = None):
         self.size = None if IS_PYPY else getsizeof(value)
         self.access = 0
 
@@ -21,7 +21,7 @@ class CacheValue:
     def expired(self):
         """Check if value is expired."""
         if self.expire_at:
-            return datetime.utcnow() > self.expire_at
+            return utcnow() > self.expire_at
         return False  # pragma: no cover
 
     def refresh_ttl(self, expire_at: datetime):
