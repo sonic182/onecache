@@ -1,14 +1,23 @@
 """Onecache main module."""
 
+import datetime
+import sys
 from collections import OrderedDict
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import timedelta
 from sys import getsizeof
 from threading import Lock
 from typing import Any, Dict, Optional
 
 from onecache.cache_value import CacheValue
 from onecache.utils import IS_PYPY
+
+
+def utcnow():
+    if sys.version_info >= (3, 11):
+        return datetime.datetime.now(datetime.UTC)
+    else:
+        return datetime.datetime.utcnow()
 
 
 class ExpirableCache(object):
@@ -26,10 +35,10 @@ class ExpirableCache(object):
     def __init__(
         self,
         size: int = 512,
-        timeout: int = None,
+        timeout: Optional[int] = None,
         refresh_ttl=False,
         thread_safe=False,
-        max_mem_size: int = None,
+        max_mem_size: Optional[int] = None,
     ):
         self.cache: Dict[str, CacheValue] = OrderedDict()
         self.timeout = timeout
@@ -49,7 +58,7 @@ class ExpirableCache(object):
                 self._pop_one()
 
             if self.timeout:
-                expire_at = datetime.utcnow() + timedelta(milliseconds=self.timeout)
+                expire_at = utcnow() + timedelta(milliseconds=self.timeout)
                 value = CacheValue(data, expire_at)
             else:
                 value = CacheValue(data)
@@ -108,7 +117,7 @@ class ExpirableCache(object):
         cache_value = self.cache.get(key)
         if cache_value and (milliseconds or self.timeout):
             ms = milliseconds if milliseconds else self.timeout
-            expire_at = datetime.utcnow() + timedelta(milliseconds=ms)
+            expire_at = utcnow() + timedelta(milliseconds=ms)
             cache_value.refresh_ttl(expire_at)
 
     @classmethod
@@ -154,7 +163,7 @@ class LRUCache(ExpirableCache):
             with self._scoped():
                 self._increment(cache_value)
             return cache_value.value
-        
+
         return None
 
     def _increment(self, val: CacheValue):
