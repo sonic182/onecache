@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] 2025-01-26
+### Added
+* python 3.13 cmpatibility
+
 
 ## [0.7.0] 2024-08-01
 ### Added
@@ -73,7 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache class
 - Sync and Async decorators
 
-[Unreleased]: https://github.com/sonic182/onecache/compare/0.7.0..HEAD
+[Unreleased]: https://github.com/sonic182/onecache/compare/0.7.1..HEAD
+[0.7.1]: https://github.com/sonic182/onecache/compare/0.7.0..0.7.1
 [0.7.0]: https://github.com/sonic182/onecache/compare/0.6.0..0.7.0
 [0.6.0]: https://github.com/sonic182/onecache/compare/0.5.1..0.6.0
 [0.5.1]: https://github.com/sonic182/onecache/compare/0.5.0..0.5.1
