@@ -6,15 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] 2025-10-30
+### Added
+* python 3.14 compatibility
+
 ## [0.7.1] 2025-01-26
 ### Added
-* python 3.13 cmpatibility
+* python 3.13 compatibility
 
 
 ## [0.7.0] 2024-08-01
 ### Added
 * poetry for project management
-* utcnow() function util for newer python versions
+* utcnow() function utility for newer python versions
 
 ## [0.6.0] 2023-08-11
 ### Added
@@ -77,7 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache class
 - Sync and Async decorators
 
-[Unreleased]: https://github.com/sonic182/onecache/compare/0.7.1..HEAD
+[Unreleased]: https://github.com/sonic182/onecache/compare/0.7.2..HEAD
+[0.7.2]: https://github.com/sonic182/onecache/compare/0.7.1..0.7.2
 [0.7.1]: https://github.com/sonic182/onecache/compare/0.7.0..0.7.1
 [0.7.0]: https://github.com/sonic182/onecache/compare/0.6.0..0.7.0
 [0.6.0]: https://github.com/sonic182/onecache/compare/0.5.1..0.6.0
