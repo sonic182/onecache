@@ -19,7 +19,8 @@ classifiers = [
 # packages = [{include = "onecache"}]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.14"
+python = ">=3.8,<3.15"
+packaging = "^24.1"
 
 [tool.poetry.group.test.dependencies]
 flake8 =  {version= "^7.1.0", python = ">=3.8.1"}
