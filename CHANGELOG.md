@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] 2025-11-12
+### Removed
+- Dropped the unused `packaging` dependency from runtime requirements
+
 ## [0.7.2] 2025-10-30
 ### Added
 * python 3.14 compatibility
@@ -81,7 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache class
 - Sync and Async decorators
 
-[Unreleased]: https://github.com/sonic182/onecache/compare/0.7.2..HEAD
+[Unreleased]: https://github.com/sonic182/onecache/compare/0.8.0..HEAD
+[0.8.0]: https://github.com/sonic182/onecache/compare/0.7.2..0.8.0
 [0.7.2]: https://github.com/sonic182/onecache/compare/0.7.1..0.7.2
 [0.7.1]: https://github.com/sonic182/onecache/compare/0.7.0..0.7.1
 [0.7.0]: https://github.com/sonic182/onecache/compare/0.6.0..0.7.0
