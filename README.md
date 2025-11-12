@@ -5,9 +5,9 @@
 
 Python cache for sync and async code.
 
-Cache uses LRU algoritm. Cache can optionally have TTL.
+Cache uses an LRU algorithm and can optionally set TTLs per entry.
 
-Tested in python 3.7, 3.9, 3.11 and pypy3.9 for windows, mac and linux (see github status badge), it should work in versions between them. It may work for python3.6
+Tested automatically on CPython 3.8–3.14 and PyPy 3.9 across Linux, macOS, and Windows (see the workflow badge). Earlier versions may work but are not part of the supported matrix.
 
 # Usage
 
@@ -63,12 +63,20 @@ If num of records exceds maxsize, it drops the oldest.
 
 # Development
 
-Install packages with pip-tools:
+Install dependencies with Poetry (includes dev + test groups):
 ```bash
-pip install pip-tools
-pip-compile
-pip-compile test-requirements.in
-pip-sync requirements.txt test-requirements.txt
+poetry install --with test,dev
+```
+
+Run the test suite and coverage locally:
+```bash
+poetry run pytest --cov
+```
+
+Lint and format checks:
+```bash
+poetry run flake8
+poetry run autopep8 --in-place --recursive onecache tests
 ```
 
 # Contribute
