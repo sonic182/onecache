@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] 2026-02-20
+### Changed
+- Removed the maximum Python version constraint from runtime requirements (`python = ">=3.8"`)
+- Updated Python classifiers and refreshed CI/docs for newer Python versions
+
 ## [0.8.0] 2025-11-12
 ### Removed
 - Dropped the unused `packaging` dependency from runtime requirements
@@ -85,7 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache class
 - Sync and Async decorators
 
-[Unreleased]: https://github.com/sonic182/onecache/compare/0.8.0..HEAD
+[Unreleased]: https://github.com/sonic182/onecache/compare/0.8.1..HEAD
+[0.8.1]: https://github.com/sonic182/onecache/compare/0.8.0..0.8.1
 [0.8.0]: https://github.com/sonic182/onecache/compare/0.7.2..0.8.0
 [0.7.2]: https://github.com/sonic182/onecache/compare/0.7.1..0.7.2
 [0.7.1]: https://github.com/sonic182/onecache/compare/0.7.0..0.7.1
