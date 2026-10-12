@@ -68,6 +68,22 @@ The decorated function exposes its cache as `.cache`: `.cache.expire(*args, **kw
 
 Set `ONECACHE_NO_EXTENSIONS` to any non-empty value to force the pure Python implementation. If the extension failed to build when installing from source (e.g. no compiler), pip may keep reusing that pure Python build from its cache; reinstall with `pip install --no-cache-dir --force-reinstall onecache` after installing a compiler.
 
+# Performance
+
+Compared with `functools.lru_cache` (CPython's C implementation), in nanoseconds per call (lower is better), measured with `benchmarks/compare_lru_cache.py` on CPython 3.12, macOS x86_64, `maxsize=512`:
+
+| Case | lru_cache | onecache (Cython) | Cython vs lru_cache | onecache (pure Python) |
+|---|---|---|---|---|
+| Hit, 1 positional arg | 93 | 282 | 3.0x slower | 1,793 |
+| Hit, 2 args + 1 kwarg | 244 | 818 | 3.3x slower | 3,889 |
+| Miss on a full cache (evicts) | 255 | 684 | 2.7x slower | 2,729 |
+| Hit, thread safe | 90 | 324 | 3.6x slower | 1,314 |
+| Hit, with ttl | n/a | 395 | n/a | 1,851 |
+
+`lru_cache` is faster because it only hashes the arguments, while onecache turns them into a string key. In exchange, onecache supports TTLs, async functions, expiring a single entry with `expire()`, a memory limit, and unhashable arguments such as lists and dicts (`lru_cache` raises `TypeError` for them). If you only need a plain LRU cache for hashable arguments, `functools.lru_cache` is the faster choice.
+
+The pure Python column is what PyPy and platforms without a prebuilt wheel use. Numbers depend on the machine; run `python benchmarks/compare_lru_cache.py` (after `make build_ext`) to measure yours.
+
 
 # Development
 
