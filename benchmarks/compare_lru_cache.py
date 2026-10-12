@@ -12,12 +12,15 @@ import subprocess
 import sys
 import timeit
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 CASES = [
     ("hit_1_arg", "Hit, 1 positional arg"),
     ("hit_kwargs", "Hit, 2 args + 1 kwarg"),
     ("miss_full", "Miss on a full cache (evicts)"),
     ("hit_thread_safe", "Hit, thread safe"),
     ("hit_ttl", "Hit, with ttl"),
+    ("hit_list", "Hit, list argument"),
 ]
 MAXSIZE = 512
 
@@ -39,6 +42,7 @@ def lru_cache_cases():
         "miss_full": lambda: cached(next(counter)),
         "hit_thread_safe": lambda: cached(1),
         "hit_ttl": None,
+        "hit_list": None,
     }
 
 
@@ -52,6 +56,7 @@ def onecache_cases():
     for cached in (plain, safe, ttl):
         cached(1)
     plain(1, "x", c=3)
+    plain([1, 2])
     for _ in range(MAXSIZE * 2):
         plain(next(counter))
     return {
@@ -60,6 +65,7 @@ def onecache_cases():
         "miss_full": lambda: plain(next(counter)),
         "hit_thread_safe": lambda: safe(1),
         "hit_ttl": lambda: ttl(1),
+        "hit_list": lambda: plain([1, 2]),
     }
 
 
@@ -105,11 +111,11 @@ def main():
         print(json.dumps({"compiled": onecache.COMPILED, "results": measure(onecache_cases())}))
         return
 
-    baseline = measure(lru_cache_cases())
     compiled = measure_onecache(pure=False)
-    pure = measure_onecache(pure=True)
     if not compiled["compiled"]:
         sys.exit("onecache extension is not built, run `make build_ext` first")
+    baseline = measure(lru_cache_cases())
+    pure = measure_onecache(pure=True)
 
     print(f"Python {platform.python_version()} ({platform.python_implementation()}), "
           f"{platform.system()} {platform.machine()}, maxsize={MAXSIZE}, ns per call (lower is better)\n")

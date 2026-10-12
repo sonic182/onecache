@@ -58,13 +58,19 @@ Decorator classes supports the following arguments
 * **cache_class (class)**: Class to use for cache instance. default: LRUCache
 * **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be refresh per access. default: False
 * **thread_safe (bool)**: tell decorator to use thread safe lock. default=False
-* **max_mem_size (int)**: max mem size in bytes, as the sum of `sys.getsizeof(key) + sys.getsizeof(value)` of every entry (shallow sizes). default=None which means no limit. For pypy this value is ignored as the objects can change by the JIT compilation.
+* **max_mem_size (int)**: max mem size in bytes, as the sum over every entry of the shallow `sys.getsizeof` of its value, its key and, when the key is a tuple of arguments, each of those arguments. default=None which means no limit. For pypy this value is ignored as the objects can change by the JIT compilation.
 
 If num of records exceds maxsize, it drops the least recently used one. With `max_mem_size`, a value bigger than the limit is not cached.
 
 Use `thread_safe=True` when the decorated function is called from several threads.
 
-Arguments are keyed like `functools.lru_cache` does: hashable arguments by their hash and equality (so `1`, `1.0` and `True` can share an entry, while `1` and `"1"` don't), and unhashable ones such as lists and dicts by their string form. To key every call by strings instead, use a `cache_class` subclass that overrides the `serialize_key` classmethod.
+Arguments are keyed like `functools.lru_cache` (with `typed=False`) does:
+
+* A single `int` or `str` argument is the key itself; any other call is keyed by the tuple of its arguments and keyword arguments (keyword order doesn't matter). Arguments are compared by hash and equality, so `f(1, 2)`, `f(1.0, 2)` and `f(True, 2)` share an entry, while `f(1)` and `f("1")` don't.
+* If a call has a list, dict or set argument, the whole call is keyed by the string form of its arguments, like onecache did before 0.10.0.
+* The key holds a reference to the arguments, so the cache keeps them alive (including `self` for decorated methods) until the entry is evicted or expires. Use `ttl`, a smaller `maxsize` or `.cache.clear()` if that matters.
+
+To key every call by strings instead, use a `cache_class` subclass that overrides the `serialize_key` classmethod.
 
 The decorated function exposes its cache as `.cache`: `.cache.expire(*args, **kwargs)` drops one entry, `.cache.clear()` drops all of them, and `.cache.cache` is a read-only view of the entries.
 
@@ -76,11 +82,12 @@ Compared with `functools.lru_cache` (CPython's C implementation), in nanoseconds
 
 | Case | lru_cache | onecache (Cython) | Cython vs lru_cache | onecache (pure Python) |
 |---|---|---|---|---|
-| Hit, 1 positional arg | 93 | 145 | 1.6x slower | 815 |
-| Hit, 2 args + 1 kwarg | 243 | 475 | 2.0x slower | 1,378 |
-| Miss on a full cache (evicts) | 266 | 491 | 1.8x slower | 2,014 |
-| Hit, thread safe | 95 | 189 | 2.0x slower | 830 |
-| Hit, with ttl | n/a | 236 | n/a | 1,268 |
+| Hit, 1 positional arg | 88 | 138 | 1.6x slower | 767 |
+| Hit, 2 args + 1 kwarg | 234 | 488 | 2.1x slower | 1,592 |
+| Miss on a full cache (evicts) | 252 | 462 | 1.8x slower | 1,901 |
+| Hit, thread safe | 88 | 180 | 2.1x slower | 788 |
+| Hit, with ttl | n/a | 225 | n/a | 1,211 |
+| Hit, list argument | n/a | 580 | n/a | 2,239 |
 
 `lru_cache` is still faster: it is built into CPython, while onecache's decorated function goes through a Cython call wrapper and does more bookkeeping per call. In exchange, onecache supports TTLs, async functions, expiring a single entry with `expire()`, a memory limit, and unhashable arguments such as lists and dicts (`lru_cache` raises `TypeError` for them). If you only need a plain LRU cache for hashable arguments, `functools.lru_cache` is the faster choice.
 

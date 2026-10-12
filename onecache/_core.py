@@ -6,7 +6,8 @@ from sys import getsizeof
 from threading import RLock
 from time import monotonic
 from types import MappingProxyType
-from typing import Any, Dict, Optional
+from typing import Any, Optional
+from weakref import WeakKeyDictionary
 
 from onecache.utils import IS_PYPY
 
@@ -26,7 +27,8 @@ class _Marker:
 
 _KWARGS = _Marker("<kwargs>")
 _UNHASHABLE = _Marker("<unhashable>")
-_DEFAULT_KEY_CLASSES: Dict[type, bool] = {}
+_DEFAULT_KEY_CLASSES: "WeakKeyDictionary[type, bool]" = WeakKeyDictionary()
+_UNHASHABLE_TYPES = frozenset((list, dict, set))
 
 
 class CacheValue:
@@ -89,8 +91,17 @@ def _make_key(args: tuple, kwargs: dict):
             arg = args[0]
             if type(arg) is str or type(arg) is int:
                 return arg
+        for arg in args:
+            if type(arg) in _UNHASHABLE_TYPES:
+                return (_UNHASHABLE, _string_key(args, kwargs))
         key = args
     else:
+        for arg in args:
+            if type(arg) in _UNHASHABLE_TYPES:
+                return (_UNHASHABLE, _string_key(args, kwargs))
+        for value in kwargs.values():
+            if type(value) in _UNHASHABLE_TYPES:
+                return (_UNHASHABLE, _string_key(args, kwargs))
         parts = list(args)
         parts.append(_KWARGS)
         for name, value in kwargs.items() if len(kwargs) == 1 else sorted(kwargs.items()):
@@ -104,7 +115,16 @@ def _make_key(args: tuple, kwargs: dict):
     return key
 
 
+def _key_size(key) -> int:
+    size = getsizeof(key)
+    if type(key) is tuple:
+        size += sum(getsizeof(part) for part in key)
+    return size
+
+
 def _default_keys(cls) -> bool:
+    if cls is ExpirableCache or cls is LRUCache:
+        return True
     try:
         return _DEFAULT_KEY_CLASSES[cls]
     except KeyError:
@@ -223,7 +243,7 @@ class ExpirableCache:
             self._purge_expired(now)
         size = 0
         if self._max_mem_size:
-            size = getsizeof(key) + getsizeof(data)
+            size = _key_size(key) + getsizeof(data)
             if size > self._max_mem_size:
                 if key in self._data:
                     self._remove_key(key)
@@ -327,7 +347,11 @@ class ExpirableCache:
 
     @classmethod
     def serialize_key(cls, data: Any):
-        """Serialize a single argument into its key representation."""
+        """Serialize a single argument into a string key.
+
+        Overriding it in a subclass makes the cache use string keys built with it. Whether a class
+        overrides it is checked once per class.
+        """
         if type(data) is str:
             return data
         if isinstance(data, dict):

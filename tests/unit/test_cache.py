@@ -199,11 +199,12 @@ def test_decorated_method_and_custom_cache_class():
     assert isinstance(Doubler.custom.cache, MyCache)
 
 
-def test_argument_keys():
+@pytest.mark.parametrize("thread_safe", [False, True])
+def test_argument_keys(thread_safe):
     """Test keys for hashable, unhashable and keyword arguments."""
     calls = Counter()
 
-    @CacheDecorator()
+    @CacheDecorator(thread_safe=thread_safe)
     def something(*args, **kwargs):
         calls.count += 1
         return len(args) + len(kwargs)
@@ -222,6 +223,17 @@ def test_argument_keys():
     something([1, 2])
     something(1, b=2, c=3)
     assert calls.count == 7
+
+    class Clash:
+        def __hash__(self):
+            return 1
+
+        def __eq__(self, other):
+            raise TypeError("cannot compare")
+
+    something(Clash())
+    with pytest.raises(TypeError, match="cannot compare"):
+        something(Clash())
 
 
 @pytest.mark.asyncio
@@ -492,3 +504,11 @@ def test_lru_max_mem_size():
     something.cache.set("big", os.urandom(1024 * 4))
     assert "big" not in something.cache
     assert len(something.cache) == 2
+
+    @CacheDecorator(max_mem_size=1024 * 64)
+    def sized(text, num):
+        return num
+
+    text = "x" * 10000
+    sized(text, 1)
+    assert sized.cache.current_size >= getsizeof(text)

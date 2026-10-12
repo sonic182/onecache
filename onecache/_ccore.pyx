@@ -16,6 +16,7 @@ from cpython.pythread cimport (
 
 from sys import getsizeof
 from types import MappingProxyType, MethodType
+from weakref import WeakKeyDictionary
 
 
 cdef extern from *:
@@ -64,7 +65,7 @@ class _Marker:
 
 cdef object _KWARGS = _Marker("<kwargs>")
 cdef object _UNHASHABLE = _Marker("<unhashable>")
-cdef dict _DEFAULT_KEY_CLASSES = {}
+cdef object _DEFAULT_KEY_CLASSES = WeakKeyDictionary()
 
 
 def monotonic():
@@ -182,6 +183,11 @@ cdef object _string_key(tuple args, dict kwargs):
     return "-".join(parts)
 
 
+cdef inline bint _unhashable_type(object value):
+    cdef type kind = type(value)
+    return kind is list or kind is dict or kind is set
+
+
 cdef object _make_key_unchecked(tuple args, dict kwargs):
     cdef Py_ssize_t nargs = len(args)
     cdef Py_ssize_t index
@@ -193,7 +199,16 @@ cdef object _make_key_unchecked(tuple args, dict kwargs):
             kind = type(arg)
             if kind is str or kind is int:
                 return arg
+        for arg in args:
+            if _unhashable_type(arg):
+                return (_UNHASHABLE, _string_key(args, kwargs))
         return args
+    for arg in args:
+        if _unhashable_type(arg):
+            return (_UNHASHABLE, _string_key(args, kwargs))
+    for value in kwargs.values():
+        if _unhashable_type(value):
+            return (_UNHASHABLE, _string_key(args, kwargs))
     key = PyTuple_New(nargs + 1 + 2 * len(kwargs))
     for index in range(nargs):
         item = args[index]
@@ -226,7 +241,17 @@ cdef object _make_key(tuple args, dict kwargs):
     return key
 
 
+cdef object _key_size(object key):
+    size = getsizeof(key)
+    if type(key) is tuple:
+        for part in <tuple>key:
+            size += getsizeof(part)
+    return size
+
+
 cdef bint _default_keys(object cls) except -1:
+    if cls is ExpirableCache or cls is LRUCache:
+        return True
     result = _DEFAULT_KEY_CLASSES.get(cls)
     if result is None:
         result = next(klass for klass in cls.__mro__ if "serialize_key" in vars(klass)) is ExpirableCache
@@ -410,7 +435,7 @@ cdef class ExpirableCache:
             self._purge_expired(now)
         obj = self._data.get(key)
         if self._max_mem:
-            size = getsizeof(key) + getsizeof(data)
+            size = _key_size(key) + getsizeof(data)
             if size > self._max_mem:
                 if obj is not None:
                     self._remove(<CacheValue>obj)
@@ -532,7 +557,11 @@ cdef class ExpirableCache:
 
     @classmethod
     def serialize_key(cls, data):
-        """Serialize a single argument into its key representation."""
+        """Serialize a single argument into a string key.
+
+        Overriding it in a subclass makes the cache use string keys built with it. Whether a class
+        overrides it is checked once per class.
+        """
         if type(data) is str:
             return data
         if isinstance(data, dict):
