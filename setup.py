@@ -1,8 +1,8 @@
 """Build the optional Cython extension; falls back to pure Python when it cannot be built.
 
 Environment variables:
-    * ONECACHE_NO_EXTENSIONS=1: skip the extension (pure Python package).
-    * ONECACHE_REQUIRE_EXTENSIONS=1: fail the build instead of falling back.
+    * ONECACHE_NO_EXTENSIONS (any non-empty value): skip the extension (pure Python package).
+    * ONECACHE_REQUIRE_EXTENSIONS (any non-empty value): fail the build instead of falling back.
 """
 
 import os

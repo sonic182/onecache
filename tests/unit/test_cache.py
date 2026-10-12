@@ -1,5 +1,6 @@
 import os
 import pickle
+import threading
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 from sys import getsizeof
@@ -300,20 +301,29 @@ def test_custom_key_serialization_and_expire():
     assert calls.count == 2
 
 
-def test_reentrant_removal_from_finalizer():
+@pytest.mark.parametrize("thread_safe", [False, True])
+def test_reentrant_removal_from_finalizer(thread_safe):
     """Test a value finalizer touching the cache while entries are purged."""
-    cache = LRUCache(timeout=10000)
+    cache = LRUCache(timeout=10000, thread_safe=thread_safe)
+    results = []
 
     class Reenter:
         def __del__(self):
             cache.expire("b")
 
-    cache.set("a", Reenter())
-    cache.set("b", 1)
-    cache.set("c", 2)
-    set_expired("a", cache)
-    set_expired("b", cache)
-    assert cache.get("c") == 2
+    def run():
+        cache.set("a", Reenter())
+        cache.set("b", 1)
+        cache.set("c", 2)
+        set_expired("a", cache)
+        set_expired("b", cache)
+        results.append(cache.get("c"))
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(5)
+    assert not thread.is_alive(), "cache deadlocked"
+    assert results == [2]
     assert "a" not in cache
     assert "b" not in cache
 
@@ -329,6 +339,7 @@ def test_edited_expiration_and_non_positive_ttl():
     for timeout in (0, -5):
         cache = LRUCache(timeout=timeout)
         cache.set("a", 1)
+        cache.refresh_key_ttl("a")
         assert cache.get("a") == 1
 
 
@@ -373,15 +384,16 @@ def test_clear_and_read_only_view():
 
     something(1)
     something(2)
+    view = something.cache.cache
     with pytest.raises(TypeError):
-        something.cache.cache["3"] = CacheValue(3)
+        view["3"] = CacheValue(3)
     something.cache.clear()
     assert len(something.cache) == 0
     assert something.cache.current_size == 0
 
     for num in (3, 4, 5):
         something(num)
-    assert something.cache.cache == {"4": CacheValue(4), "5": CacheValue(5)}
+    assert view == {"4": CacheValue(4), "5": CacheValue(5)}
 
 
 def test_serialize():

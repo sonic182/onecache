@@ -3,7 +3,7 @@
 from collections import OrderedDict
 from contextlib import nullcontext
 from sys import getsizeof
-from threading import Lock
+from threading import RLock
 from time import monotonic
 from types import MappingProxyType
 from typing import Any, Dict, Optional
@@ -90,7 +90,7 @@ class ExpirableCache:
         self._current_size = 0
         self.refresh_ttl = refresh_ttl
         self._thread_safe = bool(thread_safe)
-        self._guard = Lock() if thread_safe else nullcontext()
+        self._guard = RLock() if thread_safe else nullcontext()
 
     @property
     def cache(self):
@@ -167,13 +167,13 @@ class ExpirableCache:
         if key in self._data:
             self._remove_key(key)
         elif self._data and len(self._data) >= self.size:
-            self._pop_one()
+            self._remove_key(next(iter(self._data)))
 
         item = CacheValue(data)
         if self._max_mem_size:
             item.size = size
             while self._data and self._current_size + size > self._max_mem_size:
-                self._pop_one()
+                self._remove_key(next(iter(self._data)))
             self._current_size += size
         self._data[key] = item
         if self._ttl:
@@ -197,9 +197,6 @@ class ExpirableCache:
 
     def _make_key(self, args: tuple, kwargs: dict) -> str:
         return _make_key(args, kwargs)
-
-    def _pop_one(self):
-        self._remove_key(next(iter(self._data)))
 
     def _purge_expired(self, now: float):
         expiry = self._expiry
@@ -232,15 +229,15 @@ class ExpirableCache:
     def clear(self):
         """Remove every entry."""
         with self._guard:
-            data = self._data
-            self._data = OrderedDict()
-            self._expiry = OrderedDict()
+            entries = list(self._data.values())
+            self._data.clear()
+            self._expiry.clear()
             self._current_size = 0
-        data.clear()
+        entries.clear()
 
     def refresh_key_ttl(self, key: Any, milliseconds=None):
         """Do refresh of key ttl, if present."""
-        ms = milliseconds or self._timeout
+        ms = milliseconds or (self._timeout if self._ttl else None)
         if not ms:
             return
         with self._guard:

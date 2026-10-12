@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `LRUCache` now evicts the least recently used entry (previously the least frequently accessed)
 - Expiration checks are O(1) amortized instead of scanning the whole cache on every access, and eviction no longer sorts the cache
-- `thread_safe=True` now guards every cache operation, not only writes
+- `thread_safe=True` now guards every cache operation, not only writes, with a reentrant lock
 - `max_mem_size` evicts entries until the new value fits, instead of always keeping at least one previous entry; a value bigger than `max_mem_size` is not cached
 - Setting an existing key again moves it to the newest position in the eviction order
 - `ExpirableCache.cache` is a read-only view; use `expire()` or `clear()` to remove entries. Its iteration order is not the eviction order

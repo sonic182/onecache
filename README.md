@@ -66,7 +66,7 @@ Use `thread_safe=True` when the decorated function is called from several thread
 
 The decorated function exposes its cache as `.cache`: `.cache.expire(*args, **kwargs)` drops one entry, `.cache.clear()` drops all of them, and `.cache.cache` is a read-only view of the entries.
 
-Set `ONECACHE_NO_EXTENSIONS=1` to force the pure Python implementation. If the extension failed to build when installing from source (e.g. no compiler), pip may keep reusing that pure Python build from its cache; reinstall with `pip install --no-cache-dir --force-reinstall onecache` after installing a compiler.
+Set `ONECACHE_NO_EXTENSIONS` to any non-empty value to force the pure Python implementation. If the extension failed to build when installing from source (e.g. no compiler), pip may keep reusing that pure Python build from its cache; reinstall with `pip install --no-cache-dir --force-reinstall onecache` after installing a compiler.
 
 
 # Development
@@ -91,7 +91,7 @@ ONECACHE_NO_EXTENSIONS=1 poetry run pytest
 
 # Releasing
 
-Bump `version` in `pyproject.toml` and push a tag with the same value (e.g. `0.9.0`). The `Wheels` workflow builds the wheels with cibuildwheel, the sdist and a pure Python fallback wheel, and publishes them to PyPI through trusted publishing.
+Pull requests only build cp310 and cp314 wheels, so first run the `Wheels` workflow by hand on `master` (Actions → Wheels → Run workflow) to build and test every Python version. Then bump `version` in `pyproject.toml` and push a tag with the same value (e.g. `0.9.0`). The `Wheels` workflow builds the wheels with cibuildwheel, the sdist and a pure Python fallback wheel, and publishes them to PyPI through trusted publishing.
 
 Lint and format checks:
 ```bash

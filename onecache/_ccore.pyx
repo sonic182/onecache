@@ -7,6 +7,7 @@ from cpython.pythread cimport (
     PyThread_acquire_lock,
     PyThread_allocate_lock,
     PyThread_free_lock,
+    PyThread_get_thread_ident,
     PyThread_release_lock,
     PyThread_type_lock,
 )
@@ -174,6 +175,8 @@ cdef class ExpirableCache:
     cdef public bint refresh_ttl
     cdef readonly bint thread_safe
     cdef PyThread_type_lock _lock
+    cdef unsigned long _owner
+    cdef Py_ssize_t _depth
     cdef double _ttl
     cdef Py_ssize_t _max_mem
     cdef bint _lru
@@ -216,13 +219,26 @@ cdef class ExpirableCache:
             PyThread_free_lock(self._lock)
 
     cdef inline int _acquire(self) except -1:
-        if self._lock is not NULL and not PyThread_acquire_lock(self._lock, NOWAIT_LOCK):
+        cdef unsigned long ident
+        if self._lock is NULL:
+            return 0
+        ident = PyThread_get_thread_ident()
+        if self._depth and self._owner == ident:
+            self._depth += 1
+            return 0
+        if not PyThread_acquire_lock(self._lock, NOWAIT_LOCK):
             with nogil:
                 PyThread_acquire_lock(self._lock, WAIT_LOCK)
+        self._owner = ident
+        self._depth = 1
         return 0
 
     cdef inline void _release(self):
-        if self._lock is not NULL:
+        if self._lock is NULL:
+            return
+        self._depth -= 1
+        if self._depth == 0:
+            self._owner = 0
             PyThread_release_lock(self._lock)
 
     @property
@@ -373,23 +389,23 @@ cdef class ExpirableCache:
 
     def clear(self):
         """Remove every entry."""
-        cdef dict data
+        cdef list entries
         self._acquire()
         try:
-            data = self._data
+            entries = list(self._data.values())
             _break_links(self._root, self._eroot)
-            self._data = {}
+            self._data.clear()
             self._root.prev = self._root.next = self._root
             self._eroot.eprev = self._eroot.enext = self._eroot
             self._ecount = 0
             self.current_size = 0
         finally:
             self._release()
-        data.clear()
+        entries.clear()
 
     def refresh_key_ttl(self, key, milliseconds=None):
         """Do refresh of key ttl, if present."""
-        ms = milliseconds or self.timeout
+        ms = milliseconds or (self.timeout if self._ttl > 0.0 else None)
         if not ms:
             return
         self._acquire()
