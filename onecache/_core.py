@@ -6,7 +6,7 @@ from sys import getsizeof
 from threading import RLock
 from time import monotonic
 from types import MappingProxyType
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 from weakref import WeakKeyDictionary
 
 from onecache.utils import IS_PYPY
