@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prebuilt wheels for Linux (manylinux/musllinux), macOS and Windows on x86_64 and ARM64, built with cibuildwheel
 - Decorated functions keep the wrapped function metadata (`__name__`, `__doc__`, `__wrapped__`)
 - `ExpirableCache.clear()` to drop every entry
+- `onecache.monotonic()`, the clock used for `CacheValue.expire_at`
+- Decorated functions support weak references and pickle by reference with both implementations
 
 ### Changed
 - `LRUCache` now evicts the least recently used entry (previously the least frequently accessed)
@@ -20,7 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Setting an existing key again moves it to the newest position in the eviction order
 - `ExpirableCache.cache` is a read-only view; use `expire()` or `clear()` to remove entries. Its iteration order is not the eviction order
 - `timeout`, `max_mem_size`, `current_size` and `thread_safe` are read-only attributes; the `lock` attribute was removed
-- `CacheValue.expire_at` is a monotonic timestamp in seconds (`float("inf")` when it does not expire) instead of a `datetime`
+- `CacheValue.expire_at` is a timestamp in seconds from `onecache.monotonic()` (`float("inf")` when it does not expire) instead of a `datetime`; that clock is not always `time.monotonic()`
+- `CacheValue.size` is only computed when `max_mem_size` is set (0 otherwise)
+- A `timeout` of 0 or lower means entries do not expire
+- Eviction is no longer customizable by overriding `_pop_one()`
 - Build backend switched from poetry-core to setuptools + Cython
 
 ### Removed

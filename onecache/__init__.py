@@ -5,16 +5,16 @@ from functools import update_wrapper
 from typing import Optional
 
 if os.environ.get("ONECACHE_NO_EXTENSIONS"):
-    from onecache._core import CacheValue, ExpirableCache, LRUCache
+    from onecache._core import CacheValue, ExpirableCache, LRUCache, monotonic
 
     COMPILED = False
 else:
     try:
-        from onecache._ccore import CacheValue, ExpirableCache, LRUCache
+        from onecache._ccore import CacheValue, ExpirableCache, LRUCache, monotonic
 
         COMPILED = True
     except ImportError:
-        from onecache._core import CacheValue, ExpirableCache, LRUCache
+        from onecache._core import CacheValue, ExpirableCache, LRUCache, monotonic
 
         COMPILED = False
 
@@ -25,6 +25,7 @@ __all__ = [
     "COMPILED",
     "ExpirableCache",
     "LRUCache",
+    "monotonic",
 ]
 
 _MISSING = object()

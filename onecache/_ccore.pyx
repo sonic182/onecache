@@ -117,6 +117,20 @@ cdef inline void _eunlink(CacheValue node):
     node.enext = None
 
 
+cdef void _break_links(CacheValue root, CacheValue eroot):
+    cdef CacheValue node
+    cdef CacheValue nxt
+    if root is not None:
+        node = root.next
+        while node is not None and node is not root:
+            nxt = node.next
+            node.prev = node.next = node.eprev = node.enext = None
+            node = nxt
+        root.prev = root.next = None
+    if eroot is not None:
+        eroot.eprev = eroot.enext = None
+
+
 cdef object _serialize(object data):
     if type(data) is str:
         return data
@@ -185,7 +199,7 @@ cdef class ExpirableCache:
         max_mem_size=None,
     ):
         self.timeout = timeout
-        self._ttl = timeout / 1000.0 if timeout else 0.0
+        self._ttl = timeout / 1000.0 if timeout and timeout > 0 else 0.0
         self.size = size
         self.max_mem_size = max_mem_size
         self._max_mem = int(max_mem_size) if max_mem_size else 0
@@ -197,6 +211,7 @@ cdef class ExpirableCache:
                 raise MemoryError()
 
     def __dealloc__(self):
+        _break_links(self._root, self._eroot)
         if self._lock is not NULL:
             PyThread_free_lock(self._lock)
 
@@ -268,7 +283,10 @@ cdef class ExpirableCache:
                 return default
             if self.refresh_ttl and self._ttl > 0.0:
                 item.expire_at = now + self._ttl
-                _eunlink(item)
+                if item.enext is not None:
+                    _eunlink(item)
+                else:
+                    self._ecount += 1
                 _elink_last(self._eroot, item)
         if self._lru:
             _unlink(item)
@@ -313,14 +331,17 @@ cdef class ExpirableCache:
     cdef int _purge_expired(self, double now) except -1:
         cdef CacheValue node = self._eroot.enext
         cdef CacheValue nxt
-        while node is not self._eroot and now > node.expire_at:
+        while node is not None and node is not self._eroot and now > node.expire_at:
             nxt = node.enext
             self._remove(node)
             node = nxt
         return 0
 
     cdef int _remove(self, CacheValue item) except -1:
-        del self._data[item.key]
+        if item.prev is None or item is self._root:
+            return 0
+        if self._data.get(item.key) is item:
+            del self._data[item.key]
         _unlink(item)
         if item.enext is not None:
             _eunlink(item)
@@ -352,17 +373,11 @@ cdef class ExpirableCache:
 
     def clear(self):
         """Remove every entry."""
-        cdef CacheValue node
-        cdef CacheValue nxt
         cdef dict data
         self._acquire()
         try:
             data = self._data
-            node = self._root.next
-            while node is not self._root:
-                nxt = node.next
-                node.prev = node.next = node.eprev = node.enext = None
-                node = nxt
+            _break_links(self._root, self._eroot)
             self._data = {}
             self._root.prev = self._root.next = self._root
             self._eroot.eprev = self._eroot.enext = self._eroot
@@ -407,7 +422,15 @@ cdef class ExpirableCache:
     @classmethod
     def serialize_key(cls, data):
         """Serialize a single argument into its key representation."""
-        return _serialize(data)
+        if type(data) is str:
+            return data
+        if isinstance(data, dict):
+            return ",".join([f"{key}={cls.serialize_key(val)}" for key, val in data.items()])
+        if isinstance(data, list):
+            return ",".join([cls.serialize_key(val) for val in data])
+        if isinstance(data, str):
+            return data
+        return str(data)
 
     def expire(self, *args, **kwargs):
         """Usefull to expire any combination of *args, **kwargs."""
@@ -444,6 +467,10 @@ cdef class CachedFunction:
     cdef object func
     cdef bint skip_args
     cdef dict __dict__
+    cdef object __weakref__
+
+    def __reduce__(self):
+        return self.__qualname__
 
     def __call__(self, *args, **kwargs):
         cdef ExpirableCache cache = self.cache

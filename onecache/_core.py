@@ -84,7 +84,7 @@ class ExpirableCache:
         self._data: Dict[Any, CacheValue] = OrderedDict()
         self._expiry: Dict[Any, None] = OrderedDict()
         self._timeout = timeout
-        self._ttl = timeout / 1000 if timeout else None
+        self._ttl = timeout / 1000 if timeout and timeout > 0 else None
         self.size = size
         self._max_mem_size = None if IS_PYPY else max_mem_size
         self._current_size = 0
@@ -212,8 +212,7 @@ class ExpirableCache:
 
     def _remove_key(self, key):
         item = self._data.pop(key)
-        if item.expire_at != INF:
-            self._expiry.pop(key, None)
+        self._expiry.pop(key, None)
         if self._max_mem_size:
             self._current_size -= item.size
 
@@ -262,7 +261,15 @@ class ExpirableCache:
     @classmethod
     def serialize_key(cls, data: Any):
         """Serialize a single argument into its key representation."""
-        return _serialize(data)
+        if type(data) is str:
+            return data
+        if isinstance(data, dict):
+            return ",".join([f"{key}={cls.serialize_key(val)}" for key, val in data.items()])
+        if isinstance(data, list):
+            return ",".join([cls.serialize_key(val) for val in data])
+        if isinstance(data, str):
+            return data
+        return str(data)
 
     def expire(self, *args, **kwargs):
         """Usefull to expire any combination of *args, **kwargs."""

@@ -62,6 +62,8 @@ Decorator classes supports the following arguments
 
 If num of records exceds maxsize, it drops the least recently used one. With `max_mem_size`, a value bigger than the limit is not cached.
 
+Use `thread_safe=True` when the decorated function is called from several threads.
+
 The decorated function exposes its cache as `.cache`: `.cache.expire(*args, **kwargs)` drops one entry, `.cache.clear()` drops all of them, and `.cache.cache` is a read-only view of the entries.
 
 Set `ONECACHE_NO_EXTENSIONS=1` to force the pure Python implementation. If the extension failed to build when installing from source (e.g. no compiler), pip may keep reusing that pure Python build from its cache; reinstall with `pip install --no-cache-dir --force-reinstall onecache` after installing a compiler.

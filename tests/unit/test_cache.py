@@ -1,4 +1,6 @@
 import os
+import pickle
+import weakref
 from concurrent.futures import ThreadPoolExecutor
 from sys import getsizeof
 from time import sleep
@@ -18,6 +20,11 @@ def set_expired(key, cache):
 class Counter:
     def __init__(self, count=0):
         self.count = count
+
+
+@CacheDecorator()
+def module_level_cached(num):
+    return num
 
 
 @pytest.mark.asyncio
@@ -270,24 +277,91 @@ def test_refresh_key_ttl():
 
 
 def test_custom_key_serialization_and_expire():
-    """Test cache_class overriding serialize_key, including expire()."""
-    counter = Counter()
+    """Test cache_class overriding serialize_key, nested values and expire()."""
+    calls = Counter()
 
-    class UpperKeys(LRUCache):
+    class CounterKeys(LRUCache):
         @classmethod
         def serialize_key(cls, data):
-            return str(data).upper()
+            if isinstance(data, Counter):
+                return f"counter{data.count}"
+            return super().serialize_key(data)
 
-    @CacheDecorator(cache_class=UpperKeys)
-    def something(name):
-        counter.count += 1
-        return name
+    @CacheDecorator(cache_class=CounterKeys)
+    def something(counters):
+        calls.count += 1
+        return len(counters)
 
-    something("a")
-    assert list(something.cache.cache) == ["A"]
-    something.cache.expire("a")
-    something("a")
-    assert counter.count == 2
+    something([Counter(1)])
+    something([Counter(1)])
+    assert list(something.cache.cache) == ["counter1"]
+    something.cache.expire([Counter(1)])
+    something([Counter(1)])
+    assert calls.count == 2
+
+
+def test_reentrant_removal_from_finalizer():
+    """Test a value finalizer touching the cache while entries are purged."""
+    cache = LRUCache(timeout=10000)
+
+    class Reenter:
+        def __del__(self):
+            cache.expire("b")
+
+    cache.set("a", Reenter())
+    cache.set("b", 1)
+    cache.set("c", 2)
+    set_expired("a", cache)
+    set_expired("b", cache)
+    assert cache.get("c") == 2
+    assert "a" not in cache
+    assert "b" not in cache
+
+
+def test_edited_expiration_and_non_positive_ttl():
+    """Test entries whose expiration is edited by hand, and ttl <= 0 meaning no expiration."""
+    cache = ExpirableCache(1, timeout=10000)
+    cache.set("a", 1)
+    cache.cache["a"].expire_at = float("inf")
+    cache.set("b", 2)
+    assert cache.get("b") == 2
+
+    for timeout in (0, -5):
+        cache = LRUCache(timeout=timeout)
+        cache.set("a", 1)
+        assert cache.get("a") == 1
+
+
+def test_decorated_function_pickle_and_weakref():
+    """Test decorated functions pickle by reference and support weak references."""
+    assert pickle.loads(pickle.dumps(module_level_cached)) is module_level_cached
+    assert weakref.ref(module_level_cached)() is module_level_cached
+
+
+def test_thread_safe_stress():
+    """Test concurrent operations keep the cache bounded and its size accounting exact."""
+    cache = LRUCache(16, timeout=5, refresh_ttl=True, thread_safe=True, max_mem_size=1 << 20)
+
+    def work(seed):
+        for i in range(3000):
+            key = str((seed * 7 + i) % 40)
+            op = i % 10
+            if op < 5:
+                cache.get(key)
+            elif op < 8:
+                cache.set(key, key * (i % 30 + 1))
+            elif op == 8:
+                cache.expire(key)
+            else:
+                cache.refresh_key_ttl(key, 10)
+
+    with ThreadPoolExecutor(4) as executor:
+        list(executor.map(work, range(4)))
+
+    assert len(cache) <= 16
+    if not IS_PYPY:
+        expected = sum(getsizeof(key) + getsizeof(val.value) for key, val in cache.cache.items())
+        assert cache.current_size == expected
 
 
 def test_clear_and_read_only_view():
