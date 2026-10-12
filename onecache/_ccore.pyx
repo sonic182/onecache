@@ -480,14 +480,41 @@ cdef class ExpirableCache:
     cdef int _remove(self, CacheValue item) except -1:
         if item.prev is None or item is self._root:
             return 0
-        if self._data.get(item.key) is item:
+        self._detach(item)
+        try:
+            found = self._data.get(item.key) is item
+        except TypeError:
+            found = False
+        if found:
             del self._data[item.key]
+        else:
+            self._rebuild()
+        return 0
+
+    cdef int _detach(self, CacheValue item) except -1:
         _unlink(item)
         if item.enext is not None:
             _eunlink(item)
             self._ecount -= 1
         if self._max_mem:
             self.current_size -= item.size
+        return 0
+
+    cdef int _rebuild(self) except -1:
+        """Re-insert every linked entry, for keys whose hash changed or raises since they were stored."""
+        cdef list nodes = []
+        cdef CacheValue node = self._root.next
+        while node is not self._root:
+            nodes.append(node)
+            node = node.next
+        self._data.clear()
+        for node in nodes:
+            try:
+                kept = self._data.setdefault(node.key, node) is node
+            except TypeError:
+                kept = False
+            if not kept:
+                self._detach(node)
         return 0
 
     def __contains__(self, key):

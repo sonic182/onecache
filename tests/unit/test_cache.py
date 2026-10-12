@@ -247,6 +247,40 @@ def test_argument_keys(thread_safe):
         something(Clash())
 
 
+@pytest.mark.parametrize("options", [{"ttl": 60000}, {"maxsize": 3}, {"max_mem_size": 1024 * 64, "maxsize": 3}])
+def test_argument_hash_changes_after_call(options):
+    """Test entries are removed even if their argument hash changed or raises after the call."""
+
+    class Unstable:
+        def __init__(self, value):
+            self.value = value
+            self.broken = False
+
+        def __hash__(self):
+            if self.broken:
+                raise TypeError("unhashable now")
+            return hash(self.value)
+
+        def __eq__(self, other):
+            return isinstance(other, Unstable) and self.value == other.value
+
+    @CacheDecorator(**options)
+    def something(item):
+        return item.value
+
+    changed, broken = Unstable(1), Unstable(2)
+    something(changed)
+    something(broken)
+    for item in something.cache.cache.values():
+        item.expire_at = -1.0
+    changed.value = 10
+    broken.broken = True
+    assert [something(Unstable(num)) for num in (3, 4, 5)] == [3, 4, 5]
+    assert len(something.cache) == 3
+    assert something.cache.current_size == sum(item.size for item in something.cache.cache.values())
+    assert something(Unstable(3)) == 3
+
+
 @pytest.mark.asyncio
 async def test_async_argument_keys():
     """Test the async decorator with unhashable and keyword arguments."""

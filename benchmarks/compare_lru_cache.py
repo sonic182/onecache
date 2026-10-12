@@ -18,7 +18,7 @@ CASES = [
     ("hit_1_arg", "Hit, 1 positional arg"),
     ("hit_kwargs", "Hit, 2 args + 1 kwarg"),
     ("miss_full", "Miss on a full cache (evicts)"),
-    ("hit_thread_safe", "Hit, thread safe"),
+    ("hit_thread_safe", "Hit, thread safe¹"),
     ("hit_ttl", "Hit, with ttl"),
     ("hit_list", "Hit, list argument"),
 ]

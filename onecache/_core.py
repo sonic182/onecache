@@ -6,7 +6,7 @@ from sys import getsizeof
 from threading import RLock
 from time import monotonic
 from types import MappingProxyType
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 from weakref import WeakKeyDictionary
 
 from onecache.utils import IS_PYPY
@@ -164,7 +164,7 @@ class ExpirableCache:
         max_mem_size: Optional[int] = None,
     ):
         self._data: Dict[Any, CacheValue] = OrderedDict()
-        self._expiry: Dict[Any, None] = OrderedDict()
+        self._expiry: Dict[int, Tuple[Any, CacheValue]] = OrderedDict()
         self._timeout = timeout
         self._ttl = timeout / 1000 if timeout and timeout > 0 else None
         if size < 1:
@@ -219,12 +219,12 @@ class ExpirableCache:
         if item.expire_at != INF:
             now = monotonic()
             if now > item.expire_at:
-                self._remove_key(key)
+                self._remove_entry(key, item)
                 return default
             if self.refresh_ttl and self._ttl:
                 item.expire_at = now + self._ttl
                 try:
-                    self._expiry.move_to_end(key)
+                    self._expiry.move_to_end(id(item))
                 except KeyError:
                     pass
         if self._lru:
@@ -251,24 +251,26 @@ class ExpirableCache:
         if self._max_mem_size:
             size = _key_size(key) + getsizeof(data)
             if size > self._max_mem_size:
-                if key in self._data:
-                    self._remove_key(key)
+                current = self._data.get(key)
+                if current is not None:
+                    self._remove_entry(key, current)
                 return
-        if key in self._data:
-            self._remove_key(key)
+        current = self._data.get(key)
+        if current is not None:
+            self._remove_entry(key, current)
         elif self._data and len(self._data) >= self.size:
-            self._remove_key(next(iter(self._data)))
+            self._evict_oldest()
 
         item = CacheValue(data)
         if self._max_mem_size:
             item.size = size
             while self._data and self._current_size + size > self._max_mem_size:
-                self._remove_key(next(iter(self._data)))
+                self._evict_oldest()
             self._current_size += size
         self._data[key] = item
         if self._ttl:
             item.expire_at = now + self._ttl
-            self._expiry[key] = None
+            self._expiry[id(item)] = (key, item)
 
     def _wrap(self, func, skip_args: bool = False):
         lookup = self._lookup
@@ -290,19 +292,51 @@ class ExpirableCache:
 
     def _purge_expired(self, now: float):
         expiry = self._expiry
-        data = self._data
         while expiry:
-            key = next(iter(expiry))
-            item = data.get(key)
-            if item is not None and now <= item.expire_at:
+            key, item = expiry[next(iter(expiry))]
+            if now <= item.expire_at:
                 break
-            self._remove_key(key)
+            self._remove_entry(key, item)
 
-    def _remove_key(self, key):
-        item = self._data.pop(key, None)
-        self._expiry.pop(key, None)
-        if item is not None and self._max_mem_size:
+    def _evict_oldest(self):
+        item = self._data.popitem(last=False)[1]
+        self._forget(item)
+
+    def _remove_entry(self, key, item: CacheValue):
+        try:
+            found = self._data.get(key) is item
+        except TypeError:
+            found = False
+        if found:
+            del self._data[key]
+        else:
+            self._rebuild(item)
+        self._forget(item)
+
+    def _forget(self, item: CacheValue):
+        if self._expiry:
+            self._expiry.pop(id(item), None)
+        if self._max_mem_size:
             self._current_size -= item.size
+
+    def _rebuild(self, removed: CacheValue):
+        """Re-insert every entry but removed, for keys whose hash changed or raises since they were stored.
+
+        OrderedDict.popitem reuses the stored hash, while iterating items would hash every key again.
+        """
+        data = self._data
+        entries = []
+        while data:
+            entries.append(data.popitem(last=False))
+        for key, item in entries:
+            if item is removed:
+                continue
+            try:
+                kept = data.setdefault(key, item) is item
+            except TypeError:
+                kept = False
+            if not kept:
+                self._forget(item)
 
     def __contains__(self, key):
         with self._guard:
@@ -310,7 +344,7 @@ class ExpirableCache:
             if item is None:
                 return False
             if item.expire_at != INF and monotonic() > item.expire_at:
-                self._remove_key(key)
+                self._remove_entry(key, item)
                 return False
             return True
 
@@ -339,8 +373,8 @@ class ExpirableCache:
             if item is None:
                 return
             item.expire_at = monotonic() + ms / 1000
-            self._expiry[key] = None
-            self._expiry.move_to_end(key)
+            self._expiry[id(item)] = (key, item)
+            self._expiry.move_to_end(id(item))
 
     @classmethod
     def get_key(cls, *args, **kwargs):
@@ -372,8 +406,9 @@ class ExpirableCache:
         """Usefull to expire any combination of *args, **kwargs."""
         key = self.get_key(*args, **kwargs)
         with self._guard:
-            if key in self._data:
-                self._remove_key(key)
+            item = self._data.get(key)
+            if item is not None:
+                self._remove_entry(key, item)
 
 
 class LRUCache(ExpirableCache):
