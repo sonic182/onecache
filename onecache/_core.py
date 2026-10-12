@@ -24,11 +24,17 @@ class _Marker:
     def __repr__(self):
         return self.name
 
+    def __reduce__(self):
+        return (_marker, (self.name,))
+
+
+def _marker(name: str) -> _Marker:
+    return _KWARGS if name == _KWARGS.name else _UNHASHABLE
+
 
 _KWARGS = _Marker("<kwargs>")
 _UNHASHABLE = _Marker("<unhashable>")
 _DEFAULT_KEY_CLASSES: "WeakKeyDictionary[type, bool]" = WeakKeyDictionary()
-_UNHASHABLE_TYPES = frozenset((list, dict, set))
 
 
 class CacheValue:
@@ -92,15 +98,15 @@ def _make_key(args: tuple, kwargs: dict):
             if type(arg) is str or type(arg) is int:
                 return arg
         for arg in args:
-            if type(arg) in _UNHASHABLE_TYPES:
+            if type(arg).__hash__ is None:
                 return (_UNHASHABLE, _string_key(args, kwargs))
         key = args
     else:
         for arg in args:
-            if type(arg) in _UNHASHABLE_TYPES:
+            if type(arg).__hash__ is None:
                 return (_UNHASHABLE, _string_key(args, kwargs))
         for value in kwargs.values():
-            if type(value) in _UNHASHABLE_TYPES:
+            if type(value).__hash__ is None:
                 return (_UNHASHABLE, _string_key(args, kwargs))
         parts = list(args)
         parts.append(_KWARGS)

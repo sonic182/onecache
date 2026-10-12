@@ -204,6 +204,9 @@ def test_argument_keys(thread_safe):
     """Test keys for hashable, unhashable and keyword arguments."""
     calls = Counter()
 
+    class Items(list):
+        pass
+
     @CacheDecorator(thread_safe=thread_safe)
     def something(*args, **kwargs):
         calls.count += 1
@@ -216,13 +219,21 @@ def test_argument_keys(thread_safe):
         something({"a": [1]})
         something(1, b=2, c=3)
         something(1, c=3, b=2)
-    assert calls.count == 5
+        something((1, [2]))
+        something(Items([3]))
+    assert calls.count == 7
 
     something.cache.expire([1, 2])
     something.cache.expire(1, c=3, b=2)
+    something.cache.expire((1, [2]))
+    something.cache.expire(Items([3]))
     something([1, 2])
     something(1, b=2, c=3)
-    assert calls.count == 7
+    something((1, [2]))
+    something(Items([3]))
+    assert calls.count == 11
+    key = something.cache.get_key(1, b=2)
+    assert pickle.loads(pickle.dumps(key)) == key
 
     class Clash:
         def __hash__(self):
@@ -511,4 +522,4 @@ def test_lru_max_mem_size():
 
     text = "x" * 10000
     sized(text, 1)
-    assert sized.cache.current_size >= getsizeof(text)
+    assert sized.cache.current_size == getsizeof((text, 1)) + getsizeof(text) + 2 * getsizeof(1)

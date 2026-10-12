@@ -49,6 +49,13 @@ cdef extern from *:
     double onecache_monotonic() nogil
 
 
+cdef extern from *:
+    """
+    #define onecache_unhashable(o) (Py_TYPE(o)->tp_hash == PyObject_HashNotImplemented)
+    """
+    bint onecache_unhashable(object value)
+
+
 cdef double INF = float("inf")
 cdef object _MISSING = object()
 
@@ -61,6 +68,13 @@ class _Marker:
 
     def __repr__(self):
         return self.name
+
+    def __reduce__(self):
+        return (_marker, (self.name,))
+
+
+def _marker(name):
+    return _KWARGS if name == _KWARGS.name else _UNHASHABLE
 
 
 cdef object _KWARGS = _Marker("<kwargs>")
@@ -183,11 +197,6 @@ cdef object _string_key(tuple args, dict kwargs):
     return "-".join(parts)
 
 
-cdef inline bint _unhashable_type(object value):
-    cdef type kind = type(value)
-    return kind is list or kind is dict or kind is set
-
-
 cdef object _make_key_unchecked(tuple args, dict kwargs):
     cdef Py_ssize_t nargs = len(args)
     cdef Py_ssize_t index
@@ -200,14 +209,14 @@ cdef object _make_key_unchecked(tuple args, dict kwargs):
             if kind is str or kind is int:
                 return arg
         for arg in args:
-            if _unhashable_type(arg):
+            if onecache_unhashable(arg):
                 return (_UNHASHABLE, _string_key(args, kwargs))
         return args
     for arg in args:
-        if _unhashable_type(arg):
+        if onecache_unhashable(arg):
             return (_UNHASHABLE, _string_key(args, kwargs))
     for value in kwargs.values():
-        if _unhashable_type(value):
+        if onecache_unhashable(value):
             return (_UNHASHABLE, _string_key(args, kwargs))
     key = PyTuple_New(nargs + 1 + 2 * len(kwargs))
     for index in range(nargs):
