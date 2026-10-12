@@ -2,6 +2,7 @@ import copy
 import gc
 import os
 import pickle
+import sys
 import threading
 import weakref
 from concurrent.futures import ThreadPoolExecutor
@@ -290,7 +291,8 @@ def test_argument_hash_changes_after_call(options):
     changed.value = 10
     broken.broken = True
     assert [something(Unstable(num)) for num in (3, 4, 5)] == [3, 4, 5]
-    assert len(something.cache) == (2 if COMPILED and "ttl" not in options else 3)
+    drops_all = COMPILED and "ttl" not in options and sys.version_info < (3, 14)
+    assert len(something.cache) == (2 if drops_all else 3)
     assert something(Unstable(5)) == 5
     assert something.cache.current_size == sum(item.size for item in something.cache.cache.values())
 
