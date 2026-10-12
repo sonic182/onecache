@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed (breaking)
 - Cache keys are built from the arguments themselves (hash and equality, like `functools.lru_cache`) instead of their `str()`, making hits about 2x faster with the compiled backend and 2.3x with pure Python
 - Calls whose arguments compare equal can share an entry (`f(1, 2)` and `f(1.0, 2)`, `f(1.0)` and `f(True)`; a lone `int` argument does not), `1` and `"1"` no longer do, and objects are keyed by `__hash__`/`__eq__` instead of `__str__`; calls with an unhashable argument (list, dict, set, their subclasses, non-frozen dataclasses) still use the string form
-- Keys hold references to the arguments, so the cache keeps them alive (including `self` for decorated methods) until the entry is evicted or expires, and should keep the same hash while cached
+- Keys hold references to the arguments, so the cache keeps them alive (including `self` for decorated methods) until the entry is evicted or expires, and should keep the same hash while cached; use `ttl` or a smaller `maxsize` for caches on methods or per-request objects
 - `get_key()` returns the argument itself, a tuple or a string instead of always a string, and `.cache.cache` keys change accordingly: code that builds keys by hand (`cache.get("1")`, `refresh_key_ttl("1")`) must use `cache.get_key(*args, **kwargs)`. Subclasses overriding `get`/`set` receive these keys too. To keep string keys, override `serialize_key` in a `cache_class` subclass
 - `max_mem_size` also counts the arguments referenced by tuple keys
 

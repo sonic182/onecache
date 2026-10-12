@@ -67,12 +67,14 @@ Use `thread_safe=True` when the decorated function is called from several thread
 Arguments are keyed like `functools.lru_cache` (with `typed=False`) does:
 
 * A single `int` or `str` argument is the key itself; any other call is keyed by the tuple of its arguments and keyword arguments (keyword order doesn't matter). Arguments are compared by hash and equality, so `f(1, 2)`, `f(1.0, 2)` and `f(True, 2)` share an entry, while `f(1)` and `f("1")` don't.
-* If any argument isn't hashable (a list, dict, set, a subclass of them, a non-frozen dataclass, or a tuple holding one of those), the whole call is keyed by the string form of its arguments, like onecache did before 0.10.0. Those string keys can collide, for example `f([1, 2])` and `f(["1,2"])` share an entry.
+* If any argument isn't hashable (a list, dict, set, a subclass of them, a non-frozen dataclass, or a tuple holding one of those), the whole call is keyed by the string form of its arguments, like onecache did before 0.10.0. Those string keys can collide, for example `f([1, 2])` and `f(["1,2"])` share an entry, and an object without a custom `__str__` is keyed by its address, which a later object can reuse once it is garbage collected.
 * With `thread_safe=True`, the arguments' `__hash__` and `__eq__` run while the cache lock is held, so keep them cheap and don't make them wait on other threads.
 * The key holds a reference to the arguments, so the cache keeps them alive (including `self` for decorated methods) until the entry is evicted or expires. Use `ttl`, a smaller `maxsize` or `.cache.clear()` if that matters.
 * Arguments should keep the same hash while they are cached. If one changes, or its `__hash__` starts raising, later calls with it miss the cache, and evicting or expiring its old entry may clear the whole cache.
 
 To key every call by strings instead, use a `cache_class` subclass that overrides the `serialize_key` classmethod (subclasses don't use the compiled fast path).
+
+For a function whose result depends on the exact argument type (for example `bool` vs `int`, or `float` vs `Decimal`), use a `cache_class` subclass that overrides `serialize_key`.
 
 **Upgrading to 0.10.0**: cached results are now shared by calls whose arguments compare equal (`f(1, 2)` and `f(1.0, 2)`, or `f(1.0)` and `f(True)`; a lone `int` argument stays separate, so `f(1)` and `f(1.0)` don't share), objects are keyed by `__hash__`/`__eq__` instead of `__str__`, and code that reads or expires entries by hand must build keys with `.cache.get_key(*args, **kwargs)` instead of strings such as `"1"`.
 

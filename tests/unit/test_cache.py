@@ -1,4 +1,5 @@
 import copy
+import gc
 import os
 import pickle
 import threading
@@ -9,7 +10,7 @@ from time import sleep
 
 import pytest
 
-from onecache import AsyncCacheDecorator, CacheDecorator, CacheValue, ExpirableCache, LRUCache
+from onecache import COMPILED, AsyncCacheDecorator, CacheDecorator, CacheValue, ExpirableCache, LRUCache
 from onecache.utils import IS_PYPY
 
 
@@ -235,6 +236,19 @@ def test_argument_keys(thread_safe):
     key = something.cache.get_key(1, b=2)
     assert pickle.loads(pickle.dumps(key)) == key
 
+    class Arg:
+        pass
+
+    arg = Arg()
+    released = weakref.ref(arg)
+    something(arg)
+    del arg
+    gc.collect()
+    assert released() is not None
+    something.cache.clear()
+    gc.collect()
+    assert released() is None
+
     class Clash:
         def __hash__(self):
             return 1
@@ -276,7 +290,7 @@ def test_argument_hash_changes_after_call(options):
     changed.value = 10
     broken.broken = True
     assert [something(Unstable(num)) for num in (3, 4, 5)] == [3, 4, 5]
-    assert 1 <= len(something.cache) <= 3
+    assert len(something.cache) == (2 if COMPILED and "ttl" not in options else 3)
     assert something(Unstable(5)) == 5
     assert something.cache.current_size == sum(item.size for item in something.cache.cache.values())
 
