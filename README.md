@@ -91,7 +91,7 @@ ONECACHE_NO_EXTENSIONS=1 poetry run pytest
 
 # Releasing
 
-Pull requests only build cp310 and cp314 wheels, so first run the `Wheels` workflow by hand on `master` (Actions → Wheels → Run workflow) to build and test every Python version. Then bump `version` in `pyproject.toml` and push a tag with the same value (e.g. `0.9.0`). The `Wheels` workflow builds the wheels with cibuildwheel, the sdist and a pure Python fallback wheel, and publishes them to PyPI through trusted publishing.
+Pull requests only build cp310 and cp314 wheels, so first run the `Wheels` workflow by hand on `master` (Actions → Wheels → Run workflow) to build and test every Python version. Then bump `version` in `pyproject.toml` and push a tag with the same value (e.g. `0.9.0`). The `Wheels` workflow builds the wheels with cibuildwheel, the sdist and a pure Python fallback wheel, and publishes them to PyPI through trusted publishing. That needs a `pypi` environment in the GitHub repository settings and a trusted publisher on PyPI for this repository, workflow `wheels.yml` and environment `pypi`.
 
 Lint and format checks:
 ```bash

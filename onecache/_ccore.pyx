@@ -213,6 +213,8 @@ cdef class ExpirableCache:
     ):
         self.timeout = timeout
         self._ttl = timeout / 1000.0 if timeout and timeout > 0 else 0.0
+        if size < 1:
+            raise ValueError("size must be at least 1")
         self.size = int(size)
         self.max_mem_size = max_mem_size
         self._max_mem = int(max_mem_size) if max_mem_size else 0
@@ -314,7 +316,7 @@ cdef class ExpirableCache:
                 else:
                     self._ecount += 1
                 _elink_last(self._eroot, item)
-        if self._lru:
+        if self._lru and item.prev is not None:
             _unlink(item)
             _link_last(self._root, item)
             item.access += 1

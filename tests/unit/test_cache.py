@@ -337,6 +337,10 @@ def test_edited_expiration_and_non_positive_ttl():
     cache.set("b", 2)
     assert cache.get("b") == 2
 
+    for size in (0, -1):
+        with pytest.raises(ValueError):
+            LRUCache(size)
+
     for timeout in (0, -5):
         cache = LRUCache(timeout=timeout)
         cache.set("a", 1)

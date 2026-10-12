@@ -95,6 +95,8 @@ class ExpirableCache:
         self._expiry: Dict[Any, None] = OrderedDict()
         self._timeout = timeout
         self._ttl = timeout / 1000 if timeout and timeout > 0 else None
+        if size < 1:
+            raise ValueError("size must be at least 1")
         self.size = size
         self._max_mem_size = None if IS_PYPY else max_mem_size
         self._current_size = 0
@@ -149,9 +151,15 @@ class ExpirableCache:
                 return default
             if self.refresh_ttl and self._ttl:
                 item.expire_at = now + self._ttl
-                self._expiry.move_to_end(key)
+                try:
+                    self._expiry.move_to_end(key)
+                except KeyError:
+                    pass
         if self._lru:
-            self._data.move_to_end(key)
+            try:
+                self._data.move_to_end(key)
+            except KeyError:
+                pass
             item.access += 1
         return item.value
 
@@ -213,14 +221,15 @@ class ExpirableCache:
         data = self._data
         while expiry:
             key = next(iter(expiry))
-            if now <= data[key].expire_at:
+            item = data.get(key)
+            if item is not None and now <= item.expire_at:
                 break
             self._remove_key(key)
 
     def _remove_key(self, key):
-        item = self._data.pop(key)
+        item = self._data.pop(key, None)
         self._expiry.pop(key, None)
-        if self._max_mem_size:
+        if item is not None and self._max_mem_size:
             self._current_size -= item.size
 
     def __contains__(self, key):

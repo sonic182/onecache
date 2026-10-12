@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CacheValue.expire_at` is a timestamp in seconds from `onecache.monotonic()` (`float("inf")` when it does not expire) instead of a `datetime`; that clock is not always `time.monotonic()`
 - `CacheValue.size` is only computed when `max_mem_size` is set (0 otherwise)
 - A `timeout` of 0 or lower means entries do not expire
+- A cache size (`maxsize`) lower than 1 raises `ValueError`
 - Eviction is no longer customizable by overriding `_pop_one()`
 - Cache instances (`ExpirableCache`, `LRUCache`) can't be pickled or copied; `CacheValue` entries pickle only their own data
 - On CPython, decorated functions are `CachedFunction` objects instead of plain functions (`inspect.isfunction()` is False), and compiled cache instances don't accept arbitrary attributes or weak references
