@@ -1,6 +1,8 @@
 import copy
+import gc
 import os
 import pickle
+import sys
 import threading
 import weakref
 from concurrent.futures import ThreadPoolExecutor
@@ -9,13 +11,13 @@ from time import sleep
 
 import pytest
 
-from onecache import AsyncCacheDecorator, CacheDecorator, CacheValue, ExpirableCache, LRUCache
+from onecache import COMPILED, AsyncCacheDecorator, CacheDecorator, CacheValue, ExpirableCache, LRUCache
 from onecache.utils import IS_PYPY
 
 
 def set_expired(key, cache):
     """Dummy helper to expire a cache value."""
-    key = cache.serialize_key(key)
+    key = cache.get_key(key)
     cache.cache[key].expire_at = -1.0
 
 
@@ -167,7 +169,7 @@ def test_lru():
     something(2)
     something(1)
     something(3)
-    assert something.cache.cache == {"1": CacheValue(1), "3": CacheValue(3)}
+    assert something.cache.cache == {1: CacheValue(1), 3: CacheValue(3)}
 
 
 def test_decorated_method_and_custom_cache_class():
@@ -199,6 +201,134 @@ def test_decorated_method_and_custom_cache_class():
     assert isinstance(Doubler.custom.cache, MyCache)
 
 
+@pytest.mark.parametrize("thread_safe", [False, True])
+def test_argument_keys(thread_safe):
+    """Test keys for hashable, unhashable and keyword arguments."""
+    calls = Counter()
+
+    class Items(list):
+        pass
+
+    @CacheDecorator(thread_safe=thread_safe)
+    def something(*args, **kwargs):
+        calls.count += 1
+        return len(args) + len(kwargs)
+
+    for _ in range(2):
+        something(1)
+        something("1")
+        something([1, 2])
+        something({"a": [1]})
+        something(1, b=2, c=3)
+        something(1, c=3, b=2)
+        something((1, [2]))
+        something(Items([3]))
+    assert calls.count == 7
+
+    something.cache.expire([1, 2])
+    something.cache.expire(1, c=3, b=2)
+    something.cache.expire((1, [2]))
+    something.cache.expire(Items([3]))
+    something([1, 2])
+    something(1, b=2, c=3)
+    something((1, [2]))
+    something(Items([3]))
+    assert calls.count == 11
+    key = something.cache.get_key(1, b=2)
+    assert pickle.loads(pickle.dumps(key)) == key
+
+    class Arg:
+        pass
+
+    arg = Arg()
+    released = weakref.ref(arg)
+    something(arg)
+    del arg
+    gc.collect()
+    assert released() is not None
+    something.cache.clear()
+    gc.collect()
+    assert released() is None
+
+    class Clash:
+        def __hash__(self):
+            return 1
+
+        def __eq__(self, other):
+            raise TypeError("cannot compare")
+
+    something(Clash())
+    with pytest.raises(TypeError, match="cannot compare"):
+        something(Clash())
+
+
+@pytest.mark.parametrize("options", [{"ttl": 60000}, {"maxsize": 3}, {"max_mem_size": 1024 * 64, "maxsize": 3}])
+def test_argument_hash_changes_after_call(options):
+    """Test entries are removed even if their argument hash changed or raises after the call."""
+
+    class Unstable:
+        def __init__(self, value):
+            self.value = value
+            self.broken = False
+
+        def __hash__(self):
+            if self.broken:
+                raise ValueError("unhashable now")
+            return hash(self.value)
+
+        def __eq__(self, other):
+            return isinstance(other, Unstable) and self.value == other.value
+
+    @CacheDecorator(**options)
+    def something(item):
+        return item.value
+
+    changed, broken = Unstable(1), Unstable(2)
+    something(changed)
+    something(broken)
+    for item in something.cache.cache.values():
+        item.expire_at = -1.0
+    changed.value = 10
+    broken.broken = True
+    assert [something(Unstable(num)) for num in (3, 4, 5)] == [3, 4, 5]
+    drops_all = COMPILED and "ttl" not in options and sys.version_info < (3, 14)
+    assert len(something.cache) == (2 if drops_all else 3)
+    assert something(Unstable(5)) == 5
+    assert something.cache.current_size == sum(item.size for item in something.cache.cache.values())
+
+    something.cache.clear()
+    stale, kept = Unstable(6), Unstable(7)
+    something(stale)
+    something(kept)
+    something.cache.cache[something.cache.get_key(stale)].expire_at = -1.0
+    stale.value = 60
+    kept.value = 70
+    something(Unstable(8))
+    something(Unstable(9))
+    assert something(Unstable(70)) == 70
+
+    something(kept)
+    kept.value = 700
+    assert sum(something.cache.access.values()) <= 1
+    something.cache.clear()
+    assert len(something.cache) == 0
+
+
+@pytest.mark.asyncio
+async def test_async_argument_keys():
+    """Test the async decorator with unhashable and keyword arguments."""
+    calls = Counter()
+
+    @AsyncCacheDecorator()
+    async def something(items, scale=1):
+        calls.count += 1
+        return sum(items) * scale
+
+    assert await something([1, 2], scale=2) == 6
+    assert await something([1, 2], scale=2) == 6
+    assert calls.count == 1
+
+
 def test_none_result_is_cached():
     """Test None results are cached instead of recomputed."""
     counter = Counter()
@@ -226,7 +356,7 @@ def test_ttl():
     something(3)
 
     # ttl will expire the most recently used (1)
-    assert something.cache.cache == {"2": CacheValue(2), "3": CacheValue(3)}
+    assert something.cache.cache == {2: CacheValue(2), 3: CacheValue(3)}
 
 
 def test_lru_and_ttl():
@@ -243,7 +373,7 @@ def test_lru_and_ttl():
     something(3)
 
     # ttl will expire the most recently used (1)
-    assert something.cache.access == {"2": 0, "3": 0}
+    assert something.cache.access == {2: 0, 3: 0}
 
 
 def test_lru_and_ttl_refresh():
@@ -255,14 +385,14 @@ def test_lru_and_ttl_refresh():
 
     something(1)
     something(2)
-    first_expiration = something.cache.cache["1"].expire_at
+    first_expiration = something.cache.cache[1].expire_at
     sleep(0.05)
     something(1)
-    assert something.cache.cache["1"].expire_at > first_expiration
+    assert something.cache.cache[1].expire_at > first_expiration
 
     set_expired(2, something.cache)
     something(3)
-    assert something.cache.access == {"1": 1, "3": 0}
+    assert something.cache.access == {1: 1, 3: 0}
 
 
 def test_refresh_key_ttl():
@@ -413,7 +543,7 @@ def test_clear_and_read_only_view():
 
     for num in (3, 4, 5):
         something(num)
-    assert view == {"4": CacheValue(4), "5": CacheValue(5)}
+    assert view == {4: CacheValue(4), 5: CacheValue(5)}
 
 
 def test_serialize():
@@ -440,15 +570,23 @@ def test_lru_max_mem_size():
     for i in range(3):
         something(i)
 
-    expected = (getsizeof(random_data[1]) * 2) + (getsizeof("1") + getsizeof("2"))
+    expected = (getsizeof(random_data[1]) * 2) + (getsizeof(1) + getsizeof(2))
 
-    # key "0" got removed
+    # key 0 got removed
     assert something.cache.cache == {
-        "1": CacheValue(random_data[1]),
-        "2": CacheValue(random_data[2]),
+        1: CacheValue(random_data[1]),
+        2: CacheValue(random_data[2]),
     }
     assert something.cache.current_size == expected
 
     something.cache.set("big", os.urandom(1024 * 4))
     assert "big" not in something.cache
     assert len(something.cache) == 2
+
+    @CacheDecorator(max_mem_size=1024 * 64)
+    def sized(text, num):
+        return num
+
+    text = "x" * 10000
+    sized(text, 1)
+    assert sized.cache.current_size == getsizeof((text, 1)) + getsizeof(text) + 2 * getsizeof(1)

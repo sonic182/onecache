@@ -1,6 +1,8 @@
 # cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, embedsignature=True
 """Compiled cache implementation, API compatible with onecache._core."""
 
+from cpython.ref cimport Py_INCREF
+from cpython.tuple cimport PyTuple_New, PyTuple_SET_ITEM
 from cpython.pythread cimport (
     NOWAIT_LOCK,
     WAIT_LOCK,
@@ -14,6 +16,7 @@ from cpython.pythread cimport (
 
 from sys import getsizeof
 from types import MappingProxyType, MethodType
+from weakref import WeakKeyDictionary
 
 
 cdef extern from *:
@@ -46,8 +49,37 @@ cdef extern from *:
     double onecache_monotonic() nogil
 
 
+cdef extern from *:
+    """
+    #define onecache_unhashable(o) (Py_TYPE(o)->tp_hash == PyObject_HashNotImplemented)
+    """
+    bint onecache_unhashable(object value)
+
+
 cdef double INF = float("inf")
 cdef object _MISSING = object()
+
+
+class _Marker:
+    __slots__ = ("name",)
+
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        return self.name
+
+    def __reduce__(self):
+        return (_marker, (self.name,))
+
+
+def _marker(name):
+    return _KWARGS if name == _KWARGS.name else _UNHASHABLE
+
+
+cdef object _KWARGS = _Marker("<kwargs>")
+cdef object _UNHASHABLE = _Marker("<unhashable>")
+cdef object _DEFAULT_KEY_CLASSES = WeakKeyDictionary()
 
 
 def monotonic():
@@ -154,7 +186,7 @@ cdef object _serialize(object data):
     return str(data)
 
 
-cdef object _make_key(tuple args, dict kwargs):
+cdef object _string_key(tuple args, dict kwargs):
     cdef list parts
     if not kwargs and len(args) == 1:
         return _serialize(args[0])
@@ -163,6 +195,77 @@ cdef object _make_key(tuple args, dict kwargs):
         for key in sorted(kwargs):
             parts.append(f"{key}={_serialize(kwargs[key])}")
     return "-".join(parts)
+
+
+cdef object _make_key_unchecked(tuple args, dict kwargs):
+    cdef Py_ssize_t nargs = len(args)
+    cdef Py_ssize_t index
+    cdef tuple key
+    cdef type kind
+    if not kwargs:
+        if nargs == 1:
+            arg = args[0]
+            kind = type(arg)
+            if kind is str or kind is int:
+                return arg
+        for arg in args:
+            if onecache_unhashable(arg):
+                return (_UNHASHABLE, _string_key(args, kwargs))
+        return args
+    for arg in args:
+        if onecache_unhashable(arg):
+            return (_UNHASHABLE, _string_key(args, kwargs))
+    for value in kwargs.values():
+        if onecache_unhashable(value):
+            return (_UNHASHABLE, _string_key(args, kwargs))
+    key = PyTuple_New(nargs + 1 + 2 * len(kwargs))
+    for index in range(nargs):
+        item = args[index]
+        Py_INCREF(item)
+        PyTuple_SET_ITEM(key, index, item)
+    Py_INCREF(_KWARGS)
+    PyTuple_SET_ITEM(key, nargs, _KWARGS)
+    index = nargs + 1
+    for name, value in (kwargs.items() if len(kwargs) == 1 else sorted(kwargs.items())):
+        Py_INCREF(name)
+        PyTuple_SET_ITEM(key, index, name)
+        Py_INCREF(value)
+        PyTuple_SET_ITEM(key, index + 1, value)
+        index += 2
+    return key
+
+
+cdef bint _hashable(object key):
+    try:
+        hash(key)
+    except TypeError:
+        return False
+    return True
+
+
+cdef object _make_key(tuple args, dict kwargs):
+    key = _make_key_unchecked(args, kwargs)
+    if type(key) is tuple and not _hashable(key):
+        return (_UNHASHABLE, _string_key(args, kwargs))
+    return key
+
+
+cdef object _key_size(object key):
+    size = getsizeof(key)
+    if type(key) is tuple:
+        for part in <tuple>key:
+            size += getsizeof(part)
+    return size
+
+
+cdef bint _default_keys(object cls) except -1:
+    if cls is ExpirableCache or cls is LRUCache:
+        return True
+    result = _DEFAULT_KEY_CLASSES.get(cls)
+    if result is None:
+        result = next(klass for klass in cls.__mro__ if "serialize_key" in vars(klass)) is ExpirableCache
+        _DEFAULT_KEY_CLASSES[cls] = result
+    return result
 
 
 cdef class ExpirableCache:
@@ -270,11 +373,7 @@ cdef class ExpirableCache:
 
         With max_mem_size, a value bigger than the limit is not cached.
         """
-        self._acquire()
-        try:
-            self._set(key, data)
-        finally:
-            self._release()
+        self._locked_set(key, data)
 
     def _make_key(self, tuple args, dict kwargs):
         return _make_key(args, kwargs)
@@ -287,11 +386,23 @@ cdef class ExpirableCache:
         return wrapper
 
     cdef object _locked_lookup(self, object key, object default):
+        if self._lock is NULL:
+            return self._lookup_unlocked(key, default)
         self._acquire()
         try:
             return self._lookup_unlocked(key, default)
         finally:
             self._release()
+
+    cdef int _locked_set(self, object key, object data) except -1:
+        if self._lock is NULL:
+            return self._set(key, data)
+        self._acquire()
+        try:
+            self._set(key, data)
+        finally:
+            self._release()
+        return 0
 
     cdef object _lookup_unlocked(self, object key, object default):
         cdef double now = 0.0
@@ -317,8 +428,9 @@ cdef class ExpirableCache:
                     self._ecount += 1
                 _elink_last(self._eroot, item)
         if self._lru and item.prev is not None:
-            _unlink(item)
-            _link_last(self._root, item)
+            if item.next is not self._root:
+                _unlink(item)
+                _link_last(self._root, item)
             item.access += 1
         return item.value
 
@@ -332,7 +444,7 @@ cdef class ExpirableCache:
             self._purge_expired(now)
         obj = self._data.get(key)
         if self._max_mem:
-            size = getsizeof(key) + getsizeof(data)
+            size = _key_size(key) + getsizeof(data)
             if size > self._max_mem:
                 if obj is not None:
                     self._remove(<CacheValue>obj)
@@ -368,8 +480,18 @@ cdef class ExpirableCache:
     cdef int _remove(self, CacheValue item) except -1:
         if item.prev is None or item is self._root:
             return 0
-        if self._data.get(item.key) is item:
+        self._detach(item)
+        try:
+            found = self._data.get(item.key) is item
+        except Exception:
+            found = False
+        if found:
             del self._data[item.key]
+        else:
+            self._drop_all()
+        return 0
+
+    cdef int _detach(self, CacheValue item) except -1:
         _unlink(item)
         if item.enext is not None:
             _eunlink(item)
@@ -377,6 +499,16 @@ cdef class ExpirableCache:
         if self._max_mem:
             self.current_size -= item.size
         return 0
+
+    cdef list _drop_all(self):
+        cdef list entries = list(self._data.values())
+        _break_links(self._root, self._eroot)
+        self._data.clear()
+        self._root.prev = self._root.next = self._root
+        self._eroot.eprev = self._eroot.enext = self._eroot
+        self._ecount = 0
+        self.current_size = 0
+        return entries
 
     def __contains__(self, key):
         self._acquire()
@@ -407,13 +539,7 @@ cdef class ExpirableCache:
         cdef list entries
         self._acquire()
         try:
-            entries = list(self._data.values())
-            _break_links(self._root, self._eroot)
-            self._data.clear()
-            self._root.prev = self._root.next = self._root
-            self._eroot.eprev = self._eroot.enext = self._eroot
-            self._ecount = 0
-            self.current_size = 0
+            entries = self._drop_all()
         finally:
             self._release()
         entries.clear()
@@ -446,13 +572,19 @@ cdef class ExpirableCache:
     @classmethod
     def get_key(cls, *args, **kwargs):
         """Helper method to generate keys from *args, **kwargs."""
+        if _default_keys(cls):
+            return _make_key(args, kwargs)
         serialize = cls.serialize_key
         kwargs_list = [f"{key}={serialize(kwargs[key])}" for key in sorted(kwargs)]
         return "-".join([serialize(item) for item in list(args) + kwargs_list])
 
     @classmethod
     def serialize_key(cls, data):
-        """Serialize a single argument into its key representation."""
+        """Serialize a single argument into a string key.
+
+        Overriding it in a subclass makes the cache use string keys built with it. Whether a class
+        overrides it is checked once per class.
+        """
         if type(data) is str:
             return data
         if isinstance(data, dict):
@@ -512,11 +644,17 @@ cdef class CachedFunction:
 
     def __call__(self, *args, **kwargs):
         cdef ExpirableCache cache = self.cache
-        key = "any" if self.skip_args else _make_key(args, kwargs)
-        value = cache._locked_lookup(key, _MISSING)
+        key = "any" if self.skip_args else _make_key_unchecked(args, kwargs)
+        try:
+            value = cache._locked_lookup(key, _MISSING)
+        except TypeError:
+            if _hashable(key):
+                raise
+            key = (_UNHASHABLE, _string_key(args, kwargs))
+            value = cache._locked_lookup(key, _MISSING)
         if value is _MISSING:
             value = self.func(*args, **kwargs)
-            cache.set(key, value)
+            cache._locked_set(key, value)
         return value
 
     def __get__(self, obj, objtype):
