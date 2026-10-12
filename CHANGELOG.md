@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.9.0] 2026-10-12
 ### Added
 - Cython implementation of the cache core, used automatically on CPython; pure Python fallback for PyPy and platforms without a prebuilt wheel
 - `onecache.COMPILED` flag and `ONECACHE_NO_EXTENSIONS` environment variable to force the pure Python implementation
@@ -119,7 +121,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache class
 - Sync and Async decorators
 
-[Unreleased]: https://github.com/sonic182/onecache/compare/0.8.1..HEAD
+[Unreleased]: https://github.com/sonic182/onecache/compare/0.9.0..HEAD
+[0.9.0]: https://github.com/sonic182/onecache/compare/0.8.1..0.9.0
 [0.8.1]: https://github.com/sonic182/onecache/compare/0.8.0..0.8.1
 [0.8.0]: https://github.com/sonic182/onecache/compare/0.7.2..0.8.0
 [0.7.2]: https://github.com/sonic182/onecache/compare/0.7.1..0.7.2
