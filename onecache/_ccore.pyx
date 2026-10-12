@@ -12,7 +12,7 @@ from cpython.pythread cimport (
 )
 
 from sys import getsizeof
-from types import MethodType
+from types import MappingProxyType, MethodType
 
 
 cdef extern from *:
@@ -65,9 +65,9 @@ cdef class CacheValue:
     cdef CacheValue prev, next
     cdef CacheValue eprev, enext
 
-    def __init__(self, value, double expire_at=INF):
+    def __init__(self, value, expire_at=None):
         self.value = value
-        self.expire_at = expire_at
+        self.expire_at = INF if expire_at is None else expire_at
 
     def expired(self, now=None):
         """Check if value is expired."""
@@ -152,7 +152,7 @@ cdef class ExpirableCache:
         * **max_mem_size (int)**: max mem size inside cache structure. default=None which means no limit.
     """
 
-    cdef readonly dict cache
+    cdef dict _data
     cdef readonly object timeout
     cdef public Py_ssize_t size
     cdef readonly object max_mem_size
@@ -168,7 +168,7 @@ cdef class ExpirableCache:
     cdef Py_ssize_t _ecount
 
     def __cinit__(self, *args, **kwargs):
-        self.cache = {}
+        self._data = {}
         self._root = CacheValue.__new__(CacheValue)
         self._root.prev = self._root
         self._root.next = self._root
@@ -188,7 +188,7 @@ cdef class ExpirableCache:
         self._ttl = timeout / 1000.0 if timeout else 0.0
         self.size = size
         self.max_mem_size = max_mem_size
-        self._max_mem = max_mem_size if max_mem_size else 0
+        self._max_mem = int(max_mem_size) if max_mem_size else 0
         self.refresh_ttl = refresh_ttl
         self.thread_safe = thread_safe
         if thread_safe and self._lock is NULL:
@@ -210,6 +210,11 @@ cdef class ExpirableCache:
         if self._lock is not NULL:
             PyThread_release_lock(self._lock)
 
+    @property
+    def cache(self):
+        """Read-only view of the cached entries."""
+        return MappingProxyType(self._data)
+
     def get(self, key):
         """Get value of key, None if missing or expired."""
         return self._locked_lookup(key, None)
@@ -218,7 +223,10 @@ cdef class ExpirableCache:
         return self._locked_lookup(key, default)
 
     def set(self, key, data):
-        """Set value for key, evicting entries if needed."""
+        """Set value for key, evicting entries if needed.
+
+        With max_mem_size, a value bigger than the limit is not cached.
+        """
         self._acquire()
         try:
             self._set(key, data)
@@ -248,7 +256,7 @@ cdef class ExpirableCache:
         if self._ecount:
             now = onecache_monotonic()
             self._purge_expired(now)
-        obj = self.cache.get(key)
+        obj = self._data.get(key)
         if obj is None:
             return default
         item = <CacheValue>obj
@@ -270,24 +278,31 @@ cdef class ExpirableCache:
 
     cdef int _set(self, object key, object data) except -1:
         cdef double now = 0.0
+        cdef Py_ssize_t size = 0
         cdef CacheValue item
         if self._ttl > 0.0 or self._ecount:
             now = onecache_monotonic()
         if self._ecount:
             self._purge_expired(now)
-        obj = self.cache.get(key)
+        obj = self._data.get(key)
+        if self._max_mem:
+            size = getsizeof(key) + getsizeof(data)
+            if size > self._max_mem:
+                if obj is not None:
+                    self._remove(<CacheValue>obj)
+                return 0
         if obj is not None:
             self._remove(<CacheValue>obj)
-        elif self.cache and len(self.cache) >= self.size:
+        elif self._data and len(self._data) >= self.size:
             self._remove(self._root.next)
 
         item = _new_node(key, data)
         if self._max_mem:
-            item.size = getsizeof(key) + getsizeof(data)
-            while self.cache and self.current_size + item.size > self._max_mem:
+            item.size = size
+            while self._data and self.current_size + size > self._max_mem:
                 self._remove(self._root.next)
-            self.current_size += item.size
-        self.cache[key] = item
+            self.current_size += size
+        self._data[key] = item
         _link_last(self._root, item)
         if self._ttl > 0.0:
             item.expire_at = now + self._ttl
@@ -305,7 +320,7 @@ cdef class ExpirableCache:
         return 0
 
     cdef int _remove(self, CacheValue item) except -1:
-        del self.cache[item.key]
+        del self._data[item.key]
         _unlink(item)
         if item.enext is not None:
             _eunlink(item)
@@ -323,7 +338,7 @@ cdef class ExpirableCache:
 
     cdef bint _contains(self, object key) except -1:
         cdef CacheValue item
-        obj = self.cache.get(key)
+        obj = self._data.get(key)
         if obj is None:
             return False
         item = <CacheValue>obj
@@ -333,7 +348,29 @@ cdef class ExpirableCache:
         return True
 
     def __len__(self):
-        return len(self.cache)
+        return len(self._data)
+
+    def clear(self):
+        """Remove every entry."""
+        cdef CacheValue node
+        cdef CacheValue nxt
+        cdef dict data
+        self._acquire()
+        try:
+            data = self._data
+            node = self._root.next
+            while node is not self._root:
+                nxt = node.next
+                node.prev = node.next = node.eprev = node.enext = None
+                node = nxt
+            self._data = {}
+            self._root.prev = self._root.next = self._root
+            self._eroot.eprev = self._eroot.enext = self._eroot
+            self._ecount = 0
+            self.current_size = 0
+        finally:
+            self._release()
+        data.clear()
 
     def refresh_key_ttl(self, key, milliseconds=None):
         """Do refresh of key ttl, if present."""
@@ -348,7 +385,7 @@ cdef class ExpirableCache:
 
     cdef int _refresh(self, object key, object ms) except -1:
         cdef CacheValue item
-        obj = self.cache.get(key)
+        obj = self._data.get(key)
         if obj is None:
             return 0
         item = <CacheValue>obj
@@ -363,7 +400,9 @@ cdef class ExpirableCache:
     @classmethod
     def get_key(cls, *args, **kwargs):
         """Helper method to generate keys from *args, **kwargs."""
-        return _make_key(args, kwargs)
+        serialize = cls.serialize_key
+        kwargs_list = [f"{key}={serialize(kwargs[key])}" for key in sorted(kwargs)]
+        return "-".join([serialize(item) for item in list(args) + kwargs_list])
 
     @classmethod
     def serialize_key(cls, data):
@@ -372,7 +411,7 @@ cdef class ExpirableCache:
 
     def expire(self, *args, **kwargs):
         """Usefull to expire any combination of *args, **kwargs."""
-        key = _make_key(args, kwargs)
+        key = self.get_key(*args, **kwargs)
         self._acquire()
         try:
             self._expire(key)
@@ -380,7 +419,7 @@ cdef class ExpirableCache:
             self._release()
 
     cdef int _expire(self, object key) except -1:
-        obj = self.cache.get(key)
+        obj = self._data.get(key)
         if obj is not None:
             self._remove(<CacheValue>obj)
         return 0
@@ -395,7 +434,7 @@ cdef class LRUCache(ExpirableCache):
     @property
     def access(self):
         """Get accesses as map."""
-        return {key: (<CacheValue>val).access for key, val in self.cache.items()}
+        return {key: (<CacheValue>val).access for key, val in self._data.items()}
 
 
 cdef class CachedFunction:

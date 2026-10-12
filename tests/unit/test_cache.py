@@ -240,22 +240,74 @@ def test_lru_and_ttl():
 def test_lru_and_ttl_refresh():
     """Test refresh ttl cache"""
 
-    @CacheDecorator(ttl=500, refresh_ttl=True)
+    @CacheDecorator(ttl=10000, refresh_ttl=True)
     def something(num):
         return num
 
     something(1)
     something(2)
-    sleep(0.3)
+    first_expiration = something.cache.cache["1"].expire_at
+    sleep(0.05)
     something(1)
-    sleep(0.3)
-    something(3)
+    assert something.cache.cache["1"].expire_at > first_expiration
 
-    # 1 was refreshed, 2 expired after its 500ms ttl
+    set_expired(2, something.cache)
+    something(3)
     assert something.cache.access == {"1": 1, "3": 0}
 
-    sleep(0.6)
-    assert "1" not in something.cache
+
+def test_refresh_key_ttl():
+    """Test refresh_key_ttl with a custom ttl, with and without a default ttl."""
+    caches = [LRUCache(timeout=10000), LRUCache()]
+    for cache in caches:
+        cache.set("a", 1)
+        cache.set("b", 2)
+        cache.refresh_key_ttl("a", 1)
+    sleep(0.05)
+    for cache in caches:
+        assert "a" not in cache
+        assert cache.get("b") == 2
+
+
+def test_custom_key_serialization_and_expire():
+    """Test cache_class overriding serialize_key, including expire()."""
+    counter = Counter()
+
+    class UpperKeys(LRUCache):
+        @classmethod
+        def serialize_key(cls, data):
+            return str(data).upper()
+
+    @CacheDecorator(cache_class=UpperKeys)
+    def something(name):
+        counter.count += 1
+        return name
+
+    something("a")
+    assert list(something.cache.cache) == ["A"]
+    something.cache.expire("a")
+    something("a")
+    assert counter.count == 2
+
+
+def test_clear_and_read_only_view():
+    """Test cache entries are only changed through the cache API."""
+
+    @CacheDecorator(maxsize=2, ttl=10000, max_mem_size=1 << 20)
+    def something(num):
+        return num
+
+    something(1)
+    something(2)
+    with pytest.raises(TypeError):
+        something.cache.cache["3"] = CacheValue(3)
+    something.cache.clear()
+    assert len(something.cache) == 0
+    assert something.cache.current_size == 0
+
+    for num in (3, 4, 5):
+        something(num)
+    assert something.cache.cache == {"4": CacheValue(4), "5": CacheValue(5)}
 
 
 def test_serialize():
@@ -290,3 +342,7 @@ def test_lru_max_mem_size():
         "2": CacheValue(random_data[2]),
     }
     assert something.cache.current_size == expected
+
+    something.cache.set("big", os.urandom(1024 * 4))
+    assert "big" not in something.cache
+    assert len(something.cache) == 2

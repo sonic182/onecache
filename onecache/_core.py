@@ -5,6 +5,7 @@ from contextlib import nullcontext
 from sys import getsizeof
 from threading import Lock
 from time import monotonic
+from types import MappingProxyType
 from typing import Any, Dict, Optional
 
 from onecache.utils import IS_PYPY
@@ -18,9 +19,9 @@ class CacheValue:
 
     __slots__ = ("value", "expire_at", "size", "access")
 
-    def __init__(self, value: Any, expire_at: float = INF):
+    def __init__(self, value: Any, expire_at: Optional[float] = None):
         self.value = value
-        self.expire_at = expire_at
+        self.expire_at = INF if expire_at is None else expire_at
         self.size = 0
         self.access = 0
 
@@ -80,17 +81,41 @@ class ExpirableCache:
         thread_safe=False,
         max_mem_size: Optional[int] = None,
     ):
-        self.cache: Dict[Any, CacheValue] = OrderedDict()
+        self._data: Dict[Any, CacheValue] = OrderedDict()
         self._expiry: Dict[Any, None] = OrderedDict()
-        self.timeout = timeout
+        self._timeout = timeout
         self._ttl = timeout / 1000 if timeout else None
         self.size = size
-        self.max_mem_size = None if IS_PYPY else max_mem_size
-        self.current_size = 0
+        self._max_mem_size = None if IS_PYPY else max_mem_size
+        self._current_size = 0
         self.refresh_ttl = refresh_ttl
-        self.thread_safe = thread_safe
-        self.lock = Lock() if thread_safe else None
-        self._guard = self.lock if thread_safe else nullcontext()
+        self._thread_safe = bool(thread_safe)
+        self._guard = Lock() if thread_safe else nullcontext()
+
+    @property
+    def cache(self):
+        """Read-only view of the cached entries."""
+        return MappingProxyType(self._data)
+
+    @property
+    def timeout(self):
+        """Ttl in milliseconds, None when entries do not expire."""
+        return self._timeout
+
+    @property
+    def max_mem_size(self):
+        """Max memory size of the cached entries, None when unlimited."""
+        return self._max_mem_size
+
+    @property
+    def current_size(self):
+        """Memory size of the cached entries, tracked only with max_mem_size."""
+        return self._current_size
+
+    @property
+    def thread_safe(self):
+        """Whether cache operations are guarded by a lock."""
+        return self._thread_safe
 
     def get(self, key):
         """Get value of key, None if missing or expired."""
@@ -104,7 +129,7 @@ class ExpirableCache:
     def _lookup_unlocked(self, key, default):
         if self._expiry:
             self._purge_expired(monotonic())
-        item = self.cache.get(key)
+        item = self._data.get(key)
         if item is None:
             return default
         if item.expire_at != INF:
@@ -116,12 +141,15 @@ class ExpirableCache:
                 item.expire_at = now + self._ttl
                 self._expiry.move_to_end(key)
         if self._lru:
-            self.cache.move_to_end(key)
+            self._data.move_to_end(key)
             item.access += 1
         return item.value
 
     def set(self, key, data):
-        """Set value for key, evicting entries if needed."""
+        """Set value for key, evicting entries if needed.
+
+        With max_mem_size, a value bigger than the limit is not cached.
+        """
         with self._guard:
             self._set_unlocked(key, data)
 
@@ -129,18 +157,25 @@ class ExpirableCache:
         now = monotonic() if self._ttl or self._expiry else 0.0
         if self._expiry:
             self._purge_expired(now)
-        if key in self.cache:
+        size = 0
+        if self._max_mem_size:
+            size = getsizeof(key) + getsizeof(data)
+            if size > self._max_mem_size:
+                if key in self._data:
+                    self._remove_key(key)
+                return
+        if key in self._data:
             self._remove_key(key)
-        elif self.cache and len(self.cache) >= self.size:
+        elif self._data and len(self._data) >= self.size:
             self._pop_one()
 
         item = CacheValue(data)
-        if self.max_mem_size:
-            item.size = getsizeof(key) + getsizeof(data)
-            while self.cache and self.current_size + item.size > self.max_mem_size:
+        if self._max_mem_size:
+            item.size = size
+            while self._data and self._current_size + size > self._max_mem_size:
                 self._pop_one()
-            self.current_size += item.size
-        self.cache[key] = item
+            self._current_size += size
+        self._data[key] = item
         if self._ttl:
             item.expire_at = now + self._ttl
             self._expiry[key] = None
@@ -164,27 +199,27 @@ class ExpirableCache:
         return _make_key(args, kwargs)
 
     def _pop_one(self):
-        self._remove_key(next(iter(self.cache)))
+        self._remove_key(next(iter(self._data)))
 
     def _purge_expired(self, now: float):
         expiry = self._expiry
-        cache = self.cache
+        data = self._data
         while expiry:
             key = next(iter(expiry))
-            if now <= cache[key].expire_at:
+            if now <= data[key].expire_at:
                 break
             self._remove_key(key)
 
     def _remove_key(self, key):
-        item = self.cache.pop(key)
+        item = self._data.pop(key)
         if item.expire_at != INF:
             self._expiry.pop(key, None)
-        if self.max_mem_size:
-            self.current_size -= item.size
+        if self._max_mem_size:
+            self._current_size -= item.size
 
     def __contains__(self, key):
         with self._guard:
-            item = self.cache.get(key)
+            item = self._data.get(key)
             if item is None:
                 return False
             if item.expire_at != INF and monotonic() > item.expire_at:
@@ -193,15 +228,24 @@ class ExpirableCache:
             return True
 
     def __len__(self):
-        return len(self.cache)
+        return len(self._data)
+
+    def clear(self):
+        """Remove every entry."""
+        with self._guard:
+            data = self._data
+            self._data = OrderedDict()
+            self._expiry = OrderedDict()
+            self._current_size = 0
+        data.clear()
 
     def refresh_key_ttl(self, key: Any, milliseconds=None):
         """Do refresh of key ttl, if present."""
-        ms = milliseconds or self.timeout
+        ms = milliseconds or self._timeout
         if not ms:
             return
         with self._guard:
-            item = self.cache.get(key)
+            item = self._data.get(key)
             if item is None:
                 return
             item.expire_at = monotonic() + ms / 1000
@@ -211,7 +255,9 @@ class ExpirableCache:
     @classmethod
     def get_key(cls, *args, **kwargs):
         """Helper method to generate keys from *args, **kwargs."""
-        return _make_key(args, kwargs)
+        serialize = cls.serialize_key
+        kwargs_list = [f"{key}={serialize(kwargs[key])}" for key in sorted(kwargs)]
+        return "-".join([serialize(item) for item in list(args) + kwargs_list])
 
     @classmethod
     def serialize_key(cls, data: Any):
@@ -220,9 +266,9 @@ class ExpirableCache:
 
     def expire(self, *args, **kwargs):
         """Usefull to expire any combination of *args, **kwargs."""
-        key = _make_key(args, kwargs)
+        key = self.get_key(*args, **kwargs)
         with self._guard:
-            if key in self.cache:
+            if key in self._data:
                 self._remove_key(key)
 
 
@@ -234,4 +280,4 @@ class LRUCache(ExpirableCache):
     @property
     def access(self):
         """Get accesses as map."""
-        return {key: val.access for key, val in self.cache.items()}
+        return {key: val.access for key, val in self._data.items()}

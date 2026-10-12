@@ -60,9 +60,11 @@ Decorator classes supports the following arguments
 * **thread_safe (bool)**: tell decorator to use thread safe lock. default=False
 * **max_mem_size (int)**: max mem size in bytes. Ceil for sum of cache values sizes. default=None which means no limit. For pypy this value is ignored as the objects can change by the JIT compilation.
 
-If num of records exceds maxsize, it drops the least recently used one.
+If num of records exceds maxsize, it drops the least recently used one. With `max_mem_size`, a value bigger than the limit is not cached.
 
-Set `ONECACHE_NO_EXTENSIONS=1` to force the pure Python implementation.
+The decorated function exposes its cache as `.cache`: `.cache.expire(*args, **kwargs)` drops one entry, `.cache.clear()` drops all of them, and `.cache.cache` is a read-only view of the entries.
+
+Set `ONECACHE_NO_EXTENSIONS=1` to force the pure Python implementation. If the extension failed to build when installing from source (e.g. no compiler), pip may keep reusing that pure Python build from its cache; reinstall with `pip install --no-cache-dir --force-reinstall onecache` after installing a compiler.
 
 
 # Development
