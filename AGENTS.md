@@ -25,7 +25,7 @@ python -c "import onecache; print(onecache.COMPILED)"   # check which backend is
 - The build backend is setuptools + Cython (`pyproject.toml` `[build-system]`, `setup.py`). Poetry is only used for the dev/test dependency groups.
 - `setup.py` makes the extension optional: if Cython or a compiler is missing, the build falls back to pure Python. `ONECACHE_NO_EXTENSIONS=1` skips the extension (it's also checked at import time in `onecache/__init__.py`), and `ONECACHE_REQUIRE_EXTENSIONS=1` turns a failed build into an error (CI and cibuildwheel set it).
 - `.github/workflows/python.yml` builds in place with pip (not Poetry, so the test jobs don't depend on Poetry supporting each Python version) and runs the suite twice, once per backend.
-- `.github/workflows/wheels.yml` uses cibuildwheel v3 (`[tool.cibuildwheel]` in `pyproject.toml`; v4 dropped cp38) for platform wheels, plus an sdist and a `py3-none-any` pure wheel that PyPy and unsupported platforms resolve to. Pushing a tag equal to the `pyproject.toml` version (e.g. `0.9.0`, no `v` prefix) publishes to PyPI via trusted publishing.
+- `.github/workflows/wheels.yml` builds only cp310 and cp314 wheels on pull requests (all versions on tags and manual runs), uses uv as build frontend (`build[uv]`) and caches cibuildwheel downloads. It uses cibuildwheel v3 (`[tool.cibuildwheel]` in `pyproject.toml`; v4 dropped cp38) for platform wheels, plus an sdist and a `py3-none-any` pure wheel that PyPy and unsupported platforms resolve to. Pushing a tag equal to the `pyproject.toml` version (e.g. `0.9.0`, no `v` prefix) publishes to PyPI via trusted publishing.
 - `MANIFEST.in` must keep `onecache/*.pyx` in the sdist and exclude the generated `.c`.
 
 ## Architecture
