@@ -280,9 +280,19 @@ def test_argument_hash_changes_after_call(options):
     assert something(Unstable(5)) == 5
     assert something.cache.current_size == sum(item.size for item in something.cache.cache.values())
 
-    something(changed)
-    changed.value = 30
-    assert something(Unstable(30)) == 30
+    something.cache.clear()
+    stale, kept = Unstable(6), Unstable(7)
+    something(stale)
+    something(kept)
+    something.cache.cache[something.cache.get_key(stale)].expire_at = -1.0
+    stale.value = 60
+    kept.value = 70
+    something(Unstable(8))
+    something(Unstable(9))
+    assert something(Unstable(70)) == 70
+
+    something(kept)
+    kept.value = 700
     assert sum(something.cache.access.values()) <= 1
     something.cache.clear()
     assert len(something.cache) == 0
