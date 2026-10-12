@@ -14,6 +14,21 @@ INF = float("inf")
 _MISSING = object()
 
 
+class _Marker:
+    __slots__ = ("name",)
+
+    def __init__(self, name: str):
+        self.name = name
+
+    def __repr__(self):
+        return self.name
+
+
+_KWARGS = _Marker("<kwargs>")
+_UNHASHABLE = _Marker("<unhashable>")
+_DEFAULT_KEY_CLASSES: Dict[type, bool] = {}
+
+
 class CacheValue:
     """Cache entry holding the value, its expiration (monotonic seconds) and access count."""
 
@@ -59,13 +74,44 @@ def _serialize(data: Any):
     return str(data)
 
 
-def _make_key(args: tuple, kwargs: dict) -> str:
+def _string_key(args: tuple, kwargs: dict) -> str:
     if not kwargs and len(args) == 1:
         return _serialize(args[0])
     parts = [_serialize(arg) for arg in args]
     if kwargs:
         parts.extend(f"{key}={_serialize(kwargs[key])}" for key in sorted(kwargs))
     return "-".join(parts)
+
+
+def _make_key(args: tuple, kwargs: dict):
+    if not kwargs:
+        if len(args) == 1:
+            arg = args[0]
+            if type(arg) is str or type(arg) is int:
+                return arg
+        key = args
+    else:
+        parts = list(args)
+        parts.append(_KWARGS)
+        for name, value in kwargs.items() if len(kwargs) == 1 else sorted(kwargs.items()):
+            parts.append(name)
+            parts.append(value)
+        key = tuple(parts)
+    try:
+        hash(key)
+    except TypeError:
+        return (_UNHASHABLE, _string_key(args, kwargs))
+    return key
+
+
+def _default_keys(cls) -> bool:
+    try:
+        return _DEFAULT_KEY_CLASSES[cls]
+    except KeyError:
+        pass
+    result = next(klass for klass in cls.__mro__ if "serialize_key" in vars(klass)) is ExpirableCache
+    _DEFAULT_KEY_CLASSES[cls] = result
+    return result
 
 
 class ExpirableCache:
@@ -213,7 +259,7 @@ class ExpirableCache:
         wrapper.cache = self
         return wrapper
 
-    def _make_key(self, args: tuple, kwargs: dict) -> str:
+    def _make_key(self, args: tuple, kwargs: dict):
         return _make_key(args, kwargs)
 
     def _purge_expired(self, now: float):
@@ -273,6 +319,8 @@ class ExpirableCache:
     @classmethod
     def get_key(cls, *args, **kwargs):
         """Helper method to generate keys from *args, **kwargs."""
+        if _default_keys(cls):
+            return _make_key(args, kwargs)
         serialize = cls.serialize_key
         kwargs_list = [f"{key}={serialize(kwargs[key])}" for key in sorted(kwargs)]
         return "-".join([serialize(item) for item in list(args) + kwargs_list])

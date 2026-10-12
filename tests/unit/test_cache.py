@@ -15,7 +15,7 @@ from onecache.utils import IS_PYPY
 
 def set_expired(key, cache):
     """Dummy helper to expire a cache value."""
-    key = cache.serialize_key(key)
+    key = cache.get_key(key)
     cache.cache[key].expire_at = -1.0
 
 
@@ -167,7 +167,7 @@ def test_lru():
     something(2)
     something(1)
     something(3)
-    assert something.cache.cache == {"1": CacheValue(1), "3": CacheValue(3)}
+    assert something.cache.cache == {1: CacheValue(1), 3: CacheValue(3)}
 
 
 def test_decorated_method_and_custom_cache_class():
@@ -199,6 +199,46 @@ def test_decorated_method_and_custom_cache_class():
     assert isinstance(Doubler.custom.cache, MyCache)
 
 
+def test_argument_keys():
+    """Test keys for hashable, unhashable and keyword arguments."""
+    calls = Counter()
+
+    @CacheDecorator()
+    def something(*args, **kwargs):
+        calls.count += 1
+        return len(args) + len(kwargs)
+
+    for _ in range(2):
+        something(1)
+        something("1")
+        something([1, 2])
+        something({"a": [1]})
+        something(1, b=2, c=3)
+        something(1, c=3, b=2)
+    assert calls.count == 5
+
+    something.cache.expire([1, 2])
+    something.cache.expire(1, c=3, b=2)
+    something([1, 2])
+    something(1, b=2, c=3)
+    assert calls.count == 7
+
+
+@pytest.mark.asyncio
+async def test_async_argument_keys():
+    """Test the async decorator with unhashable and keyword arguments."""
+    calls = Counter()
+
+    @AsyncCacheDecorator()
+    async def something(items, scale=1):
+        calls.count += 1
+        return sum(items) * scale
+
+    assert await something([1, 2], scale=2) == 6
+    assert await something([1, 2], scale=2) == 6
+    assert calls.count == 1
+
+
 def test_none_result_is_cached():
     """Test None results are cached instead of recomputed."""
     counter = Counter()
@@ -226,7 +266,7 @@ def test_ttl():
     something(3)
 
     # ttl will expire the most recently used (1)
-    assert something.cache.cache == {"2": CacheValue(2), "3": CacheValue(3)}
+    assert something.cache.cache == {2: CacheValue(2), 3: CacheValue(3)}
 
 
 def test_lru_and_ttl():
@@ -243,7 +283,7 @@ def test_lru_and_ttl():
     something(3)
 
     # ttl will expire the most recently used (1)
-    assert something.cache.access == {"2": 0, "3": 0}
+    assert something.cache.access == {2: 0, 3: 0}
 
 
 def test_lru_and_ttl_refresh():
@@ -255,14 +295,14 @@ def test_lru_and_ttl_refresh():
 
     something(1)
     something(2)
-    first_expiration = something.cache.cache["1"].expire_at
+    first_expiration = something.cache.cache[1].expire_at
     sleep(0.05)
     something(1)
-    assert something.cache.cache["1"].expire_at > first_expiration
+    assert something.cache.cache[1].expire_at > first_expiration
 
     set_expired(2, something.cache)
     something(3)
-    assert something.cache.access == {"1": 1, "3": 0}
+    assert something.cache.access == {1: 1, 3: 0}
 
 
 def test_refresh_key_ttl():
@@ -413,7 +453,7 @@ def test_clear_and_read_only_view():
 
     for num in (3, 4, 5):
         something(num)
-    assert view == {"4": CacheValue(4), "5": CacheValue(5)}
+    assert view == {4: CacheValue(4), 5: CacheValue(5)}
 
 
 def test_serialize():
@@ -440,12 +480,12 @@ def test_lru_max_mem_size():
     for i in range(3):
         something(i)
 
-    expected = (getsizeof(random_data[1]) * 2) + (getsizeof("1") + getsizeof("2"))
+    expected = (getsizeof(random_data[1]) * 2) + (getsizeof(1) + getsizeof(2))
 
-    # key "0" got removed
+    # key 0 got removed
     assert something.cache.cache == {
-        "1": CacheValue(random_data[1]),
-        "2": CacheValue(random_data[2]),
+        1: CacheValue(random_data[1]),
+        2: CacheValue(random_data[2]),
     }
     assert something.cache.current_size == expected
 

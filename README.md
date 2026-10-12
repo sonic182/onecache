@@ -64,6 +64,8 @@ If num of records exceds maxsize, it drops the least recently used one. With `ma
 
 Use `thread_safe=True` when the decorated function is called from several threads.
 
+Arguments are keyed like `functools.lru_cache` does: hashable arguments by their hash and equality (so `1`, `1.0` and `True` can share an entry, while `1` and `"1"` don't), and unhashable ones such as lists and dicts by their string form. To key every call by strings instead, use a `cache_class` subclass that overrides the `serialize_key` classmethod.
+
 The decorated function exposes its cache as `.cache`: `.cache.expire(*args, **kwargs)` drops one entry, `.cache.clear()` drops all of them, and `.cache.cache` is a read-only view of the entries.
 
 Set `ONECACHE_NO_EXTENSIONS` to any non-empty value to force the pure Python implementation. If the extension failed to build when installing from source (e.g. no compiler), pip may keep reusing that pure Python build from its cache; reinstall with `pip install --no-cache-dir --force-reinstall onecache` after installing a compiler.
@@ -74,13 +76,13 @@ Compared with `functools.lru_cache` (CPython's C implementation), in nanoseconds
 
 | Case | lru_cache | onecache (Cython) | Cython vs lru_cache | onecache (pure Python) |
 |---|---|---|---|---|
-| Hit, 1 positional arg | 93 | 282 | 3.0x slower | 1,793 |
-| Hit, 2 args + 1 kwarg | 244 | 818 | 3.3x slower | 3,889 |
-| Miss on a full cache (evicts) | 255 | 684 | 2.7x slower | 2,729 |
-| Hit, thread safe | 90 | 324 | 3.6x slower | 1,314 |
-| Hit, with ttl | n/a | 395 | n/a | 1,851 |
+| Hit, 1 positional arg | 93 | 145 | 1.6x slower | 815 |
+| Hit, 2 args + 1 kwarg | 243 | 475 | 2.0x slower | 1,378 |
+| Miss on a full cache (evicts) | 266 | 491 | 1.8x slower | 2,014 |
+| Hit, thread safe | 95 | 189 | 2.0x slower | 830 |
+| Hit, with ttl | n/a | 236 | n/a | 1,268 |
 
-`lru_cache` is faster because it only hashes the arguments, while onecache turns them into a string key. In exchange, onecache supports TTLs, async functions, expiring a single entry with `expire()`, a memory limit, and unhashable arguments such as lists and dicts (`lru_cache` raises `TypeError` for them). If you only need a plain LRU cache for hashable arguments, `functools.lru_cache` is the faster choice.
+`lru_cache` is still faster: it is built into CPython, while onecache's decorated function goes through a Cython call wrapper and does more bookkeeping per call. In exchange, onecache supports TTLs, async functions, expiring a single entry with `expire()`, a memory limit, and unhashable arguments such as lists and dicts (`lru_cache` raises `TypeError` for them). If you only need a plain LRU cache for hashable arguments, `functools.lru_cache` is the faster choice.
 
 The pure Python column is what PyPy and platforms without a prebuilt wheel use. Numbers depend on the machine; run `python benchmarks/compare_lru_cache.py` (after `make build_ext`) to measure yours.
 

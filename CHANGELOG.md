@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `benchmarks/compare_lru_cache.py` to compare onecache with `functools.lru_cache`
+
+### Changed
+- Cache keys are built from the arguments themselves (hash and equality, like `functools.lru_cache`) instead of their `str()`, making hits about 1.9x faster with the compiled backend and 2.2x with pure Python
+- Arguments that compare equal (`1`, `1.0`, `True`) can share an entry, `1` and `"1"` no longer do, and objects are keyed by `__hash__`/`__eq__` instead of `__str__`; unhashable arguments (lists, dicts) still use their string form
+- `.cache.cache` keys are the arguments (or a tuple of them) instead of strings; `cache_class` subclasses that override `serialize_key` keep string keys
 
 ## [0.9.0] 2026-10-12
 ### Added
