@@ -1,3 +1,4 @@
+import copy
 import os
 import pickle
 import threading
@@ -343,10 +344,25 @@ def test_edited_expiration_and_non_positive_ttl():
         assert cache.get("a") == 1
 
 
-def test_decorated_function_pickle_and_weakref():
-    """Test decorated functions pickle by reference and support weak references."""
+def test_pickle_and_copy():
+    """Test pickling and copying of decorated functions, entries and caches."""
     assert pickle.loads(pickle.dumps(module_level_cached)) is module_level_cached
+    assert copy.deepcopy(module_level_cached) is module_level_cached
     assert weakref.ref(module_level_cached)() is module_level_cached
+
+    cache = LRUCache(2000, timeout=10000)
+    for num in range(1500):
+        cache.set(str(num), num)
+    cache.get("7")
+    entries = pickle.loads(pickle.dumps(dict(cache.cache)))
+    assert entries == dict(cache.cache)
+    assert entries["7"].access == 1
+    assert entries["7"].expire_at == cache.cache["7"].expire_at
+    assert copy.deepcopy(dict(cache.cache)) == dict(cache.cache)
+
+    for action in (pickle.dumps, copy.copy, copy.deepcopy):
+        with pytest.raises(TypeError):
+            action(cache)
 
 
 def test_thread_safe_stress():

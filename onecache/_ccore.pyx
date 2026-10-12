@@ -81,6 +81,16 @@ cdef class CacheValue:
 
     __hash__ = None
 
+    def __reduce__(self):
+        return (_restore_value, (self.value, self.expire_at, self.size, self.access))
+
+
+def _restore_value(value, expire_at, size, access):
+    cdef CacheValue item = CacheValue(value, expire_at)
+    item.size = size
+    item.access = access
+    return item
+
 
 cdef inline CacheValue _new_node(object key, object value):
     cdef CacheValue node = CacheValue.__new__(CacheValue)
@@ -203,7 +213,7 @@ cdef class ExpirableCache:
     ):
         self.timeout = timeout
         self._ttl = timeout / 1000.0 if timeout and timeout > 0 else 0.0
-        self.size = size
+        self.size = int(size)
         self.max_mem_size = max_mem_size
         self._max_mem = int(max_mem_size) if max_mem_size else 0
         self.refresh_ttl = refresh_ttl
@@ -387,6 +397,9 @@ cdef class ExpirableCache:
     def __len__(self):
         return len(self._data)
 
+    def __reduce__(self):
+        raise TypeError(f"cannot pickle {type(self).__name__!r} object")
+
     def clear(self):
         """Remove every entry."""
         cdef list entries
@@ -473,7 +486,11 @@ cdef class LRUCache(ExpirableCache):
     @property
     def access(self):
         """Get accesses as map."""
-        return {key: (<CacheValue>val).access for key, val in self._data.items()}
+        self._acquire()
+        try:
+            return {key: (<CacheValue>val).access for key, val in self._data.items()}
+        finally:
+            self._release()
 
 
 cdef class CachedFunction:
@@ -487,6 +504,9 @@ cdef class CachedFunction:
 
     def __reduce__(self):
         return self.__qualname__
+
+    def __repr__(self):
+        return f"<function {self.__qualname__} at {id(self):#x}>"
 
     def __call__(self, *args, **kwargs):
         cdef ExpirableCache cache = self.cache

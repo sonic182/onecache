@@ -36,6 +36,16 @@ class CacheValue:
 
     __hash__ = None
 
+    def __reduce__(self):
+        return (_restore_value, (self.value, self.expire_at, self.size, self.access))
+
+
+def _restore_value(value, expire_at, size, access):
+    item = CacheValue(value, expire_at)
+    item.size = size
+    item.access = access
+    return item
+
 
 def _serialize(data: Any):
     if type(data) is str:
@@ -226,6 +236,9 @@ class ExpirableCache:
     def __len__(self):
         return len(self._data)
 
+    def __reduce__(self):
+        raise TypeError(f"cannot pickle {type(self).__name__!r} object")
+
     def clear(self):
         """Remove every entry."""
         with self._guard:
@@ -284,4 +297,5 @@ class LRUCache(ExpirableCache):
     @property
     def access(self):
         """Get accesses as map."""
-        return {key: val.access for key, val in self._data.items()}
+        with self._guard:
+            return {key: val.access for key, val in self._data.items()}

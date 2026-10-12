@@ -9,6 +9,7 @@ on:
       - "setup.py"
       - "pyproject.toml"
       - "MANIFEST.in"
+      - "tests/**"
       - ".github/workflows/wheels.yml"
   workflow_dispatch:
 
