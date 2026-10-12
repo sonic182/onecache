@@ -1,15 +1,16 @@
-[tool.poetry]
+[project]
 name = "onecache"
 version = "0.8.1"
 description = "Python cache for sync and async code"
-authors = ["Johanderson Mogollon <johander1822@gmail.com>"]
-license = "MIT"
+authors = [{ name = "Johanderson Mogollon", email = "johander1822@gmail.com" }]
 readme = "README.md"
+requires-python = ">=3.8"
+dynamic = ["license"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
-    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Cython",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -17,12 +18,21 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-# packages = [{include = "onecache"}]
 
-[tool.poetry.dependencies]
-python = ">=3.8"
+[project.urls]
+Homepage = "https://github.com/sonic182/onecache"
+
+[tool.setuptools]
+packages = ["onecache"]
+
+[tool.setuptools.exclude-package-data]
+onecache = ["*.c", "*.pyx", "*.html"]
+
+[tool.poetry]
+requires-poetry = ">=2.0"
 
 [tool.poetry.group.test.dependencies]
 flake8 =  {version= "^7.1.0", python = ">=3.8.1"}
@@ -37,7 +47,19 @@ pytest-cov = "^5.0.0"
 autopep8 = {version="^2.3.1", python=">=3.8"}
 sphinx = {version= "^8.0.2", python = ">=3.10"}
 pylint = {version="^3.2.6", python=">=3.8"}
+cython = ">=3.1"
+setuptools = ">=64"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=64", "Cython>=3.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.cibuildwheel]
+build-frontend = "build"
+skip = ["cp3??t-*"]
+environment = { ONECACHE_REQUIRE_EXTENSIONS = "1" }
+test-requires = ["pytest", "pytest-asyncio"]
+test-command = [
+    "python -c \"import onecache, sys; sys.exit(0 if onecache.COMPILED else 'extension not loaded')\"",
+    "pytest {project}/tests -q -p no:cacheprovider -o addopts=",
+]

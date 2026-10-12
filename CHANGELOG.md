@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Cython implementation of the cache core, used automatically on CPython; pure Python fallback for PyPy and platforms without a prebuilt wheel
+- `onecache.COMPILED` flag and `ONECACHE_NO_EXTENSIONS` environment variable to force the pure Python implementation
+- Prebuilt wheels for Linux (manylinux/musllinux), macOS and Windows on x86_64 and ARM64, built with cibuildwheel
+- Decorated functions keep the wrapped function metadata (`__name__`, `__doc__`, `__wrapped__`)
+
+### Changed
+- `LRUCache` now evicts the least recently used entry (previously the least frequently accessed)
+- Expiration checks are O(1) amortized instead of scanning the whole cache on every access, and eviction no longer sorts the cache
+- `thread_safe=True` now guards every cache operation, not only writes
+- `max_mem_size` evicts entries until the new value fits, instead of always keeping at least one previous entry
+- `CacheValue.expire_at` is a monotonic timestamp in seconds (`float("inf")` when it does not expire) instead of a `datetime`
+- Build backend switched from poetry-core to setuptools + Cython
+
+### Removed
+- `CacheValue.set_expired()`, `CacheValue.refresh_ttl()` and the `fetch_value` argument of `ExpirableCache.get()`
 
 ## [0.8.1] 2026-02-20
 ### Changed

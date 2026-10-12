@@ -1,20 +1,18 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
-from datetime import timedelta
 from sys import getsizeof
 from time import sleep
 
 import pytest
 
-from onecache import AsyncCacheDecorator, CacheDecorator, CacheValue, ExpirableCache
-from onecache.utils import IS_PYPY, utcnow
+from onecache import AsyncCacheDecorator, CacheDecorator, CacheValue, ExpirableCache, LRUCache
+from onecache.utils import IS_PYPY
 
 
 def set_expired(key, cache):
     """Dummy helper to expire a cache value."""
     key = cache.serialize_key(key)
-    val = cache.cache[key]
-    val.set_expired(utcnow() - timedelta(seconds=1))
+    cache.cache[key].expire_at = -1.0
 
 
 class Counter:
@@ -156,14 +154,53 @@ def test_lru():
     def something(num):
         return num
 
-    for _ in range(4):
-        something(1)
-
-    for _ in range(3):
-        something(2)
-
+    something(1)
+    something(2)
+    something(1)
     something(3)
     assert something.cache.cache == {"1": CacheValue(1), "3": CacheValue(3)}
+
+
+def test_decorated_method_and_custom_cache_class():
+    """Test methods bind self, and cache_class subclasses keep working."""
+
+    class MyCache(LRUCache):
+        pass
+
+    class Doubler:
+        def __init__(self, factor):
+            self.factor = factor
+            self.calls = 0
+
+        @CacheDecorator()
+        def compute(self, num):
+            self.calls += 1
+            return num * self.factor
+
+        @CacheDecorator(cache_class=MyCache)
+        def custom(self, num):
+            self.calls += 1
+            return num + self.factor
+
+    two, three = Doubler(2), Doubler(3)
+    assert [two.compute(5), two.compute(5), three.compute(5)] == [10, 10, 15]
+    assert [two.custom(1), two.custom(1)] == [3, 3]
+    assert (two.calls, three.calls) == (2, 1)
+    assert Doubler.compute.__name__ == "compute"
+    assert isinstance(Doubler.custom.cache, MyCache)
+
+
+def test_none_result_is_cached():
+    """Test None results are cached instead of recomputed."""
+    counter = Counter()
+
+    @CacheDecorator()
+    def something(num):
+        counter.count += 1
+
+    assert something(1) is None
+    assert something(1) is None
+    assert counter.count == 1
 
 
 def test_ttl():
@@ -203,20 +240,22 @@ def test_lru_and_ttl():
 def test_lru_and_ttl_refresh():
     """Test refresh ttl cache"""
 
-    @CacheDecorator(maxsize=2, ttl=300, refresh_ttl=True)
+    @CacheDecorator(ttl=500, refresh_ttl=True)
     def something(num):
         return num
 
     something(1)
-    something(1)
-    sleep(1.5 / 10)
-    something(1)
     something(2)
-    sleep(1.5 / 10)
+    sleep(0.3)
+    something(1)
+    sleep(0.3)
     something(3)
 
-    # ttl will expire the most recently used (1)
-    assert something.cache.access == {"1": 2, "3": 0}
+    # 1 was refreshed, 2 expired after its 500ms ttl
+    assert something.cache.access == {"1": 1, "3": 0}
+
+    sleep(0.6)
+    assert "1" not in something.cache
 
 
 def test_serialize():

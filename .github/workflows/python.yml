@@ -8,30 +8,45 @@ on:
 
 jobs:
   test:
+    name: ${{ matrix.os }} / ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "pypy3.9"]
-        exclude:
-          - os: windows-latest
-            python-version: "pypy3.9"
+        os: [ubuntu-26.04, ubuntu-26.04-arm, macos-15, macos-15-intel, macos-26, macos-26-intel, windows-2025]
+        python-version: ["3.10", "3.14"]
+        include:
+          - { os: windows-11-arm, python-version: "3.11" }
+          - { os: windows-11-arm, python-version: "3.14" }
+          - { os: ubuntu-26.04, python-version: "pypy3.11" }
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install poetry
-          poetry install --with test,dev
+          pip install "cython>=3.1" "setuptools>=64" pytest pytest-asyncio pytest-cov
 
-      - name: Run tests
-        run: |
-          poetry run pytest --maxfail=1 --disable-warnings -q
+      - name: Build extension
+        run: python setup.py build_ext --inplace
+        env:
+          ONECACHE_REQUIRE_EXTENSIONS: "1"
+
+      - name: Check extension is loaded
+        if: ${{ !startsWith(matrix.python-version, 'pypy') }}
+        run: python -c "import onecache, sys; sys.exit(0 if onecache.COMPILED else 'extension not loaded')"
+
+      - name: Run tests (compiled)
+        run: python -m pytest --maxfail=1 --disable-warnings -q
+
+      - name: Run tests (pure Python)
+        run: python -m pytest --maxfail=1 --disable-warnings -q
+        env:
+          ONECACHE_NO_EXTENSIONS: "1"
