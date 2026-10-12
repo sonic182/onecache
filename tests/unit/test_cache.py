@@ -258,7 +258,7 @@ def test_argument_hash_changes_after_call(options):
 
         def __hash__(self):
             if self.broken:
-                raise TypeError("unhashable now")
+                raise ValueError("unhashable now")
             return hash(self.value)
 
         def __eq__(self, other):
@@ -276,9 +276,16 @@ def test_argument_hash_changes_after_call(options):
     changed.value = 10
     broken.broken = True
     assert [something(Unstable(num)) for num in (3, 4, 5)] == [3, 4, 5]
-    assert len(something.cache) == 3
+    assert 1 <= len(something.cache) <= 3
+    assert something(Unstable(5)) == 5
     assert something.cache.current_size == sum(item.size for item in something.cache.cache.values())
-    assert something(Unstable(3)) == 3
+
+    something(changed)
+    changed.value = 30
+    assert something(Unstable(30)) == 30
+    assert sum(something.cache.access.values()) <= 1
+    something.cache.clear()
+    assert len(something.cache) == 0
 
 
 @pytest.mark.asyncio

@@ -70,7 +70,7 @@ Arguments are keyed like `functools.lru_cache` (with `typed=False`) does:
 * If any argument isn't hashable (a list, dict, set, a subclass of them, a non-frozen dataclass, or a tuple holding one of those), the whole call is keyed by the string form of its arguments, like onecache did before 0.10.0. Those string keys can collide, for example `f([1, 2])` and `f(["1,2"])` share an entry.
 * With `thread_safe=True`, the arguments' `__hash__` and `__eq__` run while the cache lock is held, so keep them cheap and don't make them wait on other threads.
 * The key holds a reference to the arguments, so the cache keeps them alive (including `self` for decorated methods) until the entry is evicted or expires. Use `ttl`, a smaller `maxsize` or `.cache.clear()` if that matters.
-* Arguments should keep the same hash while they are cached. If one changes, or its `__hash__` starts raising, later calls with it miss the cache, and its old entry is still evicted or expired normally.
+* Arguments should keep the same hash while they are cached. If one changes, or its `__hash__` starts raising, later calls with it miss the cache, and evicting or expiring its old entry may clear the whole cache.
 
 To key every call by strings instead, use a `cache_class` subclass that overrides the `serialize_key` classmethod (subclasses don't use the compiled fast path).
 

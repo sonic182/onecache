@@ -305,13 +305,15 @@ class ExpirableCache:
     def _remove_entry(self, key, item: CacheValue):
         try:
             found = self._data.get(key) is item
-        except TypeError:
+        except Exception:
             found = False
         if found:
             del self._data[key]
-        else:
-            self._rebuild(item)
-        self._forget(item)
+            self._forget(item)
+            return
+        entry = self._expiry.get(id(item))
+        if entry is not None and entry[1] is item:
+            self._drop_all()
 
     def _forget(self, item: CacheValue):
         if self._expiry:
@@ -319,24 +321,12 @@ class ExpirableCache:
         if self._max_mem_size:
             self._current_size -= item.size
 
-    def _rebuild(self, removed: CacheValue):
-        """Re-insert every entry but removed, for keys whose hash changed or raises since they were stored.
-
-        OrderedDict.popitem reuses the stored hash, while iterating items would hash every key again.
-        """
-        data = self._data
-        entries = []
-        while data:
-            entries.append(data.popitem(last=False))
-        for key, item in entries:
-            if item is removed:
-                continue
-            try:
-                kept = data.setdefault(key, item) is item
-            except TypeError:
-                kept = False
-            if not kept:
-                self._forget(item)
+    def _drop_all(self):
+        entries = list(dict.values(self._data))
+        self._data.clear()
+        self._expiry.clear()
+        self._current_size = 0
+        return entries
 
     def __contains__(self, key):
         with self._guard:
@@ -357,10 +347,7 @@ class ExpirableCache:
     def clear(self):
         """Remove every entry."""
         with self._guard:
-            entries = list(self._data.values())
-            self._data.clear()
-            self._expiry.clear()
-            self._current_size = 0
+            entries = self._drop_all()
         entries.clear()
 
     def refresh_key_ttl(self, key: Any, milliseconds=None):
@@ -420,4 +407,4 @@ class LRUCache(ExpirableCache):
     def access(self):
         """Get accesses as map."""
         with self._guard:
-            return {key: val.access for key, val in self._data.items()}
+            return {key: val.access for key, val in dict.items(self._data)}

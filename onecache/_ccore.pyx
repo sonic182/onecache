@@ -483,12 +483,12 @@ cdef class ExpirableCache:
         self._detach(item)
         try:
             found = self._data.get(item.key) is item
-        except TypeError:
+        except Exception:
             found = False
         if found:
             del self._data[item.key]
         else:
-            self._rebuild()
+            self._drop_all()
         return 0
 
     cdef int _detach(self, CacheValue item) except -1:
@@ -500,22 +500,15 @@ cdef class ExpirableCache:
             self.current_size -= item.size
         return 0
 
-    cdef int _rebuild(self) except -1:
-        """Re-insert every linked entry, for keys whose hash changed or raises since they were stored."""
-        cdef list nodes = []
-        cdef CacheValue node = self._root.next
-        while node is not self._root:
-            nodes.append(node)
-            node = node.next
+    cdef list _drop_all(self):
+        cdef list entries = list(self._data.values())
+        _break_links(self._root, self._eroot)
         self._data.clear()
-        for node in nodes:
-            try:
-                kept = self._data.setdefault(node.key, node) is node
-            except TypeError:
-                kept = False
-            if not kept:
-                self._detach(node)
-        return 0
+        self._root.prev = self._root.next = self._root
+        self._eroot.eprev = self._eroot.enext = self._eroot
+        self._ecount = 0
+        self.current_size = 0
+        return entries
 
     def __contains__(self, key):
         self._acquire()
@@ -546,13 +539,7 @@ cdef class ExpirableCache:
         cdef list entries
         self._acquire()
         try:
-            entries = list(self._data.values())
-            _break_links(self._root, self._eroot)
-            self._data.clear()
-            self._root.prev = self._root.next = self._root
-            self._eroot.eprev = self._eroot.enext = self._eroot
-            self._ecount = 0
-            self.current_size = 0
+            entries = self._drop_all()
         finally:
             self._release()
         entries.clear()
