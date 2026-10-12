@@ -7,7 +7,9 @@ Python cache for sync and async code.
 
 Cache uses an LRU algorithm and can optionally set TTLs per entry.
 
-Tested automatically on CPython 3.8–3.14 and PyPy 3.9 across Linux, macOS, and Windows (see the workflow badge). Earlier versions may work but are not part of the supported matrix.
+On CPython the cache core is a compiled Cython extension (prebuilt wheels for Linux, macOS and Windows on x86_64 and ARM64). On PyPy, or on platforms without a prebuilt wheel, it falls back to an equivalent pure Python implementation. `onecache.COMPILED` tells which one is in use.
+
+Tested automatically on CPython 3.10 and 3.14 and PyPy 3.11 across Linux, macOS, and Windows on x86_64 and ARM64 (see the workflow badge). Python 3.8 and 3.9 are still installable and get prebuilt wheels, but are no longer part of the test matrix.
 
 # Usage
 
@@ -56,9 +58,15 @@ Decorator classes supports the following arguments
 * **cache_class (class)**: Class to use for cache instance. default: LRUCache
 * **refresh_ttl (bool)**: if cache with ttl, This flag makes key expiration timestamp to be refresh per access. default: False
 * **thread_safe (bool)**: tell decorator to use thread safe lock. default=False
-* **max_mem_size (int)**: max mem size in bytes. Ceil for sum of cache values sizes. default=None which means no limit. For pypy this value is ignored as the objects can change by the JIT compilation.
+* **max_mem_size (int)**: max mem size in bytes, as the sum of `sys.getsizeof(key) + sys.getsizeof(value)` of every entry (shallow sizes). default=None which means no limit. For pypy this value is ignored as the objects can change by the JIT compilation.
 
-If num of records exceds maxsize, it drops the oldest.
+If num of records exceds maxsize, it drops the least recently used one. With `max_mem_size`, a value bigger than the limit is not cached.
+
+Use `thread_safe=True` when the decorated function is called from several threads.
+
+The decorated function exposes its cache as `.cache`: `.cache.expire(*args, **kwargs)` drops one entry, `.cache.clear()` drops all of them, and `.cache.cache` is a read-only view of the entries.
+
+Set `ONECACHE_NO_EXTENSIONS` to any non-empty value to force the pure Python implementation. If the extension failed to build when installing from source (e.g. no compiler), pip may keep reusing that pure Python build from its cache; reinstall with `pip install --no-cache-dir --force-reinstall onecache` after installing a compiler.
 
 
 # Development
@@ -68,10 +76,22 @@ Install dependencies with Poetry (includes dev + test groups):
 poetry install --with test,dev
 ```
 
-Run the test suite and coverage locally:
+Build the Cython extension in place (needed after any change to `onecache/_ccore.pyx`):
 ```bash
-poetry run pytest --cov
+make build_ext
 ```
+
+Run the test suite against the compiled and the pure Python implementations:
+```bash
+poetry run pytest
+ONECACHE_NO_EXTENSIONS=1 poetry run pytest
+```
+
+`onecache/_ccore.pyx` and `onecache/_core.py` implement the same API and must be kept in sync.
+
+# Releasing
+
+Pull requests only build cp310 and cp314 wheels, so first run the `Wheels` workflow by hand on `master` (Actions → Wheels → Run workflow) to build and test every Python version. Then bump `version` in `pyproject.toml` and push a tag with the same value (e.g. `0.9.0`). The `Wheels` workflow builds the wheels with cibuildwheel, the sdist and a pure Python fallback wheel, and publishes them to PyPI through trusted publishing. That needs a `pypi` environment in the GitHub repository settings and a trusted publisher on PyPI for this repository, workflow `wheels.yml` and environment `pypi`.
 
 Lint and format checks:
 ```bash

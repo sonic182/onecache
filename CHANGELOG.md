@@ -5,6 +5,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- Cython implementation of the cache core, used automatically on CPython; pure Python fallback for PyPy and platforms without a prebuilt wheel
+- `onecache.COMPILED` flag and `ONECACHE_NO_EXTENSIONS` environment variable to force the pure Python implementation
+- Prebuilt wheels for Linux (manylinux/musllinux), macOS and Windows on x86_64 and ARM64, built with cibuildwheel
+- Decorated functions keep the wrapped function metadata (`__name__`, `__doc__`, `__wrapped__`)
+- `ExpirableCache.clear()` to drop every entry
+- `onecache.monotonic()`, the clock used for `CacheValue.expire_at`
+- Decorated functions support weak references and pickle by reference with both implementations
+
+### Changed
+- `LRUCache` now evicts the least recently used entry (previously the least frequently accessed)
+- Expiration checks are O(1) amortized instead of scanning the whole cache on every access, and eviction no longer sorts the cache
+- `thread_safe=True` now guards every cache operation, not only writes, with a reentrant lock
+- `max_mem_size` evicts entries until the new value fits, instead of always keeping at least one previous entry; a value bigger than `max_mem_size` is not cached
+- Setting an existing key again moves it to the newest position in the eviction order
+- `ExpirableCache.cache` is a read-only view; use `expire()` or `clear()` to remove entries. Its iteration order is not the eviction order
+- `timeout`, `max_mem_size`, `current_size` and `thread_safe` are read-only attributes; the `lock` attribute was removed
+- `CacheValue.expire_at` is a timestamp in seconds from `onecache.monotonic()` (`float("inf")` when it does not expire) instead of a `datetime`; that clock is not always `time.monotonic()`
+- `CacheValue.size` is only computed when `max_mem_size` is set (0 otherwise)
+- A `timeout` of 0 or lower means entries do not expire
+- A cache size (`maxsize`) lower than 1 raises `ValueError`
+- Eviction is no longer customizable by overriding `_pop_one()`
+- Cache instances (`ExpirableCache`, `LRUCache`) can't be pickled or copied; `CacheValue` entries pickle only their own data
+- On CPython, decorated functions are `CachedFunction` objects instead of plain functions (`inspect.isfunction()` is False), and compiled cache instances don't accept arbitrary attributes or weak references
+- Build backend switched from poetry-core to setuptools + Cython
+
+### Removed
+- `CacheValue.set_expired()`, `CacheValue.refresh_ttl()`, `CacheValue.increment()` and the `fetch_value` argument of `ExpirableCache.get()`
+- `onecache.IS_PYPY` and `onecache.utcnow` re-exports (still available in `onecache.utils`)
 
 ## [0.8.1] 2026-02-20
 ### Changed

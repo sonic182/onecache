@@ -1,2 +1,7 @@
 include README.md
-include *.txt
+include CHANGELOG.md
+include pytest.ini
+include onecache/*.pyx
+recursive-include tests *.py
+exclude onecache/*.c
+global-exclude *.so *.pyd *.py[cod]

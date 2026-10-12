@@ -7,7 +7,7 @@ SPHINXOPTS    ?=
 SPHINXBUILD   ?= sphinx-build
 SOURCEDIR     = sourcedocs
 BUILDDIR      = docs
-DOCKER_CMD		= cd /root && cp -r /app/* . && pip install poetry && poetry install && poetry run pytest
+DOCKER_CMD		= cd /root && cp -r /app/* . && pip install cython setuptools pytest pytest-asyncio pytest-cov && python setup.py build_ext --inplace && python -m pytest && ONECACHE_NO_EXTENSIONS=1 python -m pytest
 
 # Put it first so that "make" without argument is like "make help".
 help:
@@ -38,16 +38,16 @@ test: test38 test39 test310 test311 test312
 	echo "OK"
 
 clear:
-	-rm -r $(shell find . -name __pycache__) build dist .mypy_cache onecache.egg-info .eggs
+	-rm -r $(shell find . -name __pycache__) build dist .mypy_cache onecache.egg-info .eggs onecache/*.c onecache/*.so onecache/*.pyd
+
+build_ext:
+	poetry run python setup.py build_ext --inplace
 
 build: clear
-	poetry build
+	pip install build
+	python -m build
 
-upload_pypi: build
-	pip install twine
-	twine upload dist/*
-
-.PHONY: help Makefile
+.PHONY: help Makefile build_ext
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).

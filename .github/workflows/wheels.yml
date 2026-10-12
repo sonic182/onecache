@@ -1,0 +1,100 @@
+name: Wheels
+
+on:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
+  pull_request:
+    paths:
+      - "onecache/**"
+      - "setup.py"
+      - "pyproject.toml"
+      - "MANIFEST.in"
+      - "tests/**"
+      - ".github/workflows/wheels.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  wheels:
+    name: Wheels ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, ubuntu-26.04-arm, windows-2025, windows-11-arm, macos-15-intel, macos-15]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.3.0
+
+      - uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/cibuildwheel-cache
+          key: cibuildwheel-v3.4.1-${{ matrix.os }}
+
+      - uses: pypa/cibuildwheel@v3.4.1
+        env:
+          CIBW_CACHE_PATH: ${{ runner.temp }}/cibuildwheel-cache
+          CIBW_BUILD: ${{ github.event_name == 'pull_request' && 'cp310-* cp314-*' || '*' }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  sdist:
+    name: Sdist and pure Python wheel
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Check tag matches project version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          test "$GITHUB_REF_NAME" = "$version" || { echo "tag $GITHUB_REF_NAME != version $version"; exit 1; }
+
+      - run: python -m pip install build
+
+      - run: python -m build --sdist
+
+      - name: Build pure Python wheel (PyPy and platforms without a compiled wheel)
+        run: python -m build --wheel
+        env:
+          ONECACHE_NO_EXTENSIONS: "1"
+
+      - run: ls dist/*-py3-none-any.whl dist/*.tar.gz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*
+
+  publish:
+    name: Publish to PyPI
+    needs: [wheels, sdist]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-26.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/onecache
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

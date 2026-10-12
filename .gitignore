@@ -22,4 +22,7 @@ logs/*.log*
 venv/
 env/
 onecache/*.so
+onecache/*.pyd
 onecache/*.c
+onecache/*.html
+wheelhouse/
